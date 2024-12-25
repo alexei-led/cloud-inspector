@@ -1,0 +1,112 @@
+---
+# AWS Service Prompts
+prompts:
+  # EC2 Prompts
+  list_instances:
+    service: ec2
+    operation: list
+    description: "List all EC2 instances with their details"
+    template: |
+      Generate Python code using boto3 to list all EC2 instances in region {region}.
+      Include the following details for each instance:
+      - Instance ID
+      - Instance type
+      - State
+      - Launch time
+      - Tags
+      - Public/Private IPs
+      
+      Requirements:
+      1. Use proper error handling
+      2. Include necessary imports
+      3. Follow AWS best practices
+      4. Add type hints
+      5. Add docstrings
+    variables:
+      - region
+    tags:
+      - ec2
+      - list
+      - instances
+
+  get_instance_metrics:
+    service: ec2
+    operation: metrics
+    description: "Get EC2 instance metrics"
+    template: |
+      Generate Python code using boto3 to get CloudWatch metrics for EC2 instance(s).
+      Metrics to collect:
+      - CPU Utilization
+      - Memory Usage
+      - Disk I/O
+      - Network Traffic
+      
+      Instance ID: {instance_id}
+      Time Period: {period} seconds
+      
+      Requirements:
+      1. Use proper error handling
+      2. Include necessary imports
+      3. Follow AWS best practices
+      4. Add type hints
+      5. Add docstrings
+    variables:
+      - instance_id
+      - period
+    tags:
+      - ec2
+      - metrics
+      - monitoring
+
+  # S3 Prompts
+  analyze_bucket:
+    service: s3
+    operation: analyze
+    description: "Analyze S3 bucket size and object count"
+    template: |
+      Generate Python code using boto3 to analyze the S3 bucket {bucket_name}.
+      Calculate and report:
+      - Total bucket size
+      - Number of objects
+      - Size distribution by prefix
+      - Last modified statistics
+      
+      Requirements:
+      1. Use proper error handling
+      2. Include necessary imports
+      3. Follow AWS best practices
+      4. Add type hints
+      5. Add docstrings
+    variables:
+      - bucket_name
+    tags:
+      - s3
+      - analysis
+      - storage
+
+  # CloudWatch Prompts
+  create_dashboard:
+    service: cloudwatch
+    operation: dashboard
+    description: "Create CloudWatch dashboard"
+    template: |
+      Generate Python code using boto3 to create a CloudWatch dashboard.
+      Include widgets for:
+      - {metric_name} statistics
+      - Period: {period} seconds
+      - Include both average and maximum values
+      - Add appropriate annotations
+      
+      Requirements:
+      1. Use proper error handling
+      2. Include necessary imports
+      3. Follow AWS best practices
+      4. Add type hints
+      5. Add docstrings
+    variables:
+      - metric_name
+      - period
+    tags:
+      - cloudwatch
+      - dashboard
+      - monitoring 

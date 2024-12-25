@@ -1,0 +1,203 @@
+models:
+  # OpenAI Models
+  gpt-4o:
+    provider: openai
+    model_id: gpt-4o
+    max_tokens: 16384 
+    temperature: 0.1
+    top_p: 0.9
+    frequency_penalty: 0.1
+    presence_penalty: 0.1
+    response_format:
+      type: object
+      properties:
+        main.py:
+          type: string
+        requirements.txt:
+          type: string
+        policy.json:
+          type: string
+      required:
+        - main.py
+        - requirements.txt
+        - policy.json
+
+  gpt-4o-mini:
+    provider: openai
+    model_id: gpt-4o-mini
+    max_tokens: 16384
+    temperature: 0.1
+    top_p: 0.9
+    frequency_penalty: 0.1
+    presence_penalty: 0.1
+    response_format:
+      type: object
+      properties:
+        main.py:
+          type: string
+        requirements.txt:
+          type: string
+        policy.json:
+          type: string
+      required:
+        - main.py
+        - requirements.txt
+        - policy.json
+
+  o1:
+    provider: openai
+    model_id: o1
+    max_tokens: 100000
+    temperature: 0.1
+    top_p: 0.9
+    frequency_penalty: 0.1
+    presence_penalty: 0.1
+    response_format:
+      type: object
+      properties:
+        main.py:
+          type: string
+        requirements.txt:
+          type: string
+        policy.json:
+          type: string
+      required:
+        - main.py
+        - requirements.txt
+        - policy.json
+
+  o1-mini:
+    provider: openai
+    model_id: o1-mini
+    max_tokens: 65536
+    temperature: 0.1
+    top_p: 0.9
+    frequency_penalty: 0.1
+    presence_penalty: 0.1
+    response_format:
+      type: object
+      properties:
+        main.py:
+          type: string
+        requirements.txt:
+          type: string
+        policy.json:
+          type: string
+      required:
+        - main.py
+        - requirements.txt
+        - policy.json
+
+  # Anthropic Models (Latest Claude 3.5)
+  claude-3-5-sonnet:
+    provider: anthropic
+    model_id: claude-3-5-sonnet-latest
+    max_tokens: 8192
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+
+  claude-3-5-haiku:
+    provider: anthropic
+    model_id: claude-3-5-haiku-latest
+    max_tokens: 8192
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+
+  # Local Models
+  llama3-2:
+    provider: ollama
+    model_id: llama3.2:latest
+    max_tokens: 4096
+    temperature: 0.1
+    top_p: 0.9
+    repeat_penalty: 1.1
+    stop: ["</code>", "```"]
+
+
+  qwen2-5-coder:
+    provider: ollama
+    model_id: qwen2.5-coder:latest
+    max_tokens: 4096
+    temperature: 0.1
+    top_p: 0.9
+    repeat_penalty: 1.1
+    stop: ["</code>", "```"]
+
+  qwq:
+    provider: ollama
+    model_id: qwq:latest
+    max_tokens: 4096
+    temperature: 0.1
+    top_p: 0.9
+    repeat_penalty: 1.1
+    stop: ["</code>", "```"]
+
+  # Google Models
+  gemini-flash-2-0:
+    provider: google
+    model_id: gemini-2.0-flash-exp
+    max_tokens: 8192
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+    response_mime_type: application/json
+    response_schema:
+      type: object
+      properties:
+        main.py:
+          type: string
+        requirements.txt:
+          type: string
+        policy.json:
+          type: string
+      required:
+        - main.py
+        - requirements.txt
+        - policy.json
+
+  # AWS Bedrock Models
+  claude-3-5-sonnet-bedrock:
+    provider: bedrock
+    model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+    max_tokens: 4096
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+
+  nova-micro:
+    provider: bedrock
+    model_id: amazon.nova-micro-v1:0:128k
+    max_tokens: 5120
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+
+  nova-pro:
+    provider: bedrock
+    model_id: amazon.nova-pro-v1:0:300k
+    max_tokens: 5120
+    temperature: 0.1
+    top_p: 0.9
+    top_k: 30
+
+provider_configs:
+  openai:
+    api_key_env: OPENAI_API_KEY
+    organization_env: OPENAI_ORG_ID
+
+  anthropic:
+    api_key_env: ANTHROPIC_API_KEY
+
+  google:
+    api_key_env: GEMINI_API_KEY
+
+  ollama:
+    base_url_env: OLLAMA_BASE_URL
+    default_base_url: http://localhost:11434
+
+  bedrock:
+    region_env: AWS_DEFAULT_REGION
+    profile_env: AWS_PROFILE
+    default_region: us-west-2 
