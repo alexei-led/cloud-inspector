@@ -92,9 +92,9 @@ class CodeGenerationWorkflow:
                 response = structured_model.invoke(messages)
                 # Convert response to dictionary format
                 generated_files = {
-                    "main.py": response.main_py,
-                    "requirements.txt": response.requirements_txt,
-                    "policy.json": response.policy_json,
+                    "main.py": self._reformat_code(response.main_py),
+                    "requirements.txt": self._reformat_code(response.requirements_txt),
+                    "policy.json": self._reformat_code(response.policy_json),
                 }
 
                 # Parse the main Python code
@@ -139,6 +139,11 @@ class CodeGenerationWorkflow:
                 error=str(e),
                 generated_files={},
             )
+
+    def _reformat_code(self, model_response: str) -> str:
+        """Reformat code by properly handling escaped characters."""
+        decoded = bytes(model_response.encode('utf-8').decode('unicode-escape').encode('utf-8')).decode('utf-8')
+        return decoded
 
     def _save_result(self, result: WorkflowResult) -> None:
         """Save workflow result to file."""
