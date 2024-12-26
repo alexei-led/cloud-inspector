@@ -11,16 +11,16 @@ models:
     response_format:
       type: object
       properties:
-        main.py:
+        main_py:
           type: string
-        requirements.txt:
+        requirements_txt:
           type: string
-        policy.json:
+        policy_json:
           type: string
       required:
-        - main.py
-        - requirements.txt
-        - policy.json
+        - main_py
+        - requirements_txt
+        - policy_json
 
   gpt-4o-mini:
     provider: openai
@@ -33,16 +33,16 @@ models:
     response_format:
       type: object
       properties:
-        main.py:
+        main_py:
           type: string
-        requirements.txt:
+        requirements_txt:
           type: string
-        policy.json:
+        policy_json:
           type: string
       required:
-        - main.py
-        - requirements.txt
-        - policy.json
+        - main_py
+        - requirements_txt
+        - policy_json
 
   o1:
     provider: openai
@@ -55,16 +55,16 @@ models:
     response_format:
       type: object
       properties:
-        main.py:
+        main_py:
           type: string
-        requirements.txt:
+        requirements_txt:
           type: string
-        policy.json:
+        policy_json:
           type: string
       required:
-        - main.py
-        - requirements.txt
-        - policy.json
+        - main_py
+        - requirements_txt
+        - policy_json
 
   o1-mini:
     provider: openai
@@ -77,16 +77,16 @@ models:
     response_format:
       type: object
       properties:
-        main.py:
+        main_py:
           type: string
-        requirements.txt:
+        requirements_txt:
           type: string
-        policy.json:
+        policy_json:
           type: string
       required:
-        - main.py
-        - requirements.txt
-        - policy.json
+        - main_py
+        - requirements_txt
+        - policy_json
 
   # Anthropic Models (Latest Claude 3.5)
   claude-3-5-sonnet:
@@ -146,16 +146,16 @@ models:
     response_schema:
       type: object
       properties:
-        main.py:
+        main_py:
           type: string
-        requirements.txt:
+        requirements_txt:
           type: string
-        policy.json:
+        policy_json:
           type: string
       required:
-        - main.py
-        - requirements.txt
-        - policy.json
+        - main_py
+        - requirements_txt
+        - policy_json
 
   # AWS Bedrock Models
   claude-3-5-sonnet-bedrock:
@@ -191,7 +191,7 @@ provider_configs:
     api_key_env: ANTHROPIC_API_KEY
 
   google:
-    api_key_env: GEMINI_API_KEY
+    api_key_env: GOOGLE_API_KEY
 
   ollama:
     base_url_env: OLLAMA_BASE_URL

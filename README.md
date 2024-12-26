@@ -111,6 +111,7 @@ cloud-inspector models list
 ### Output Structure
 
 Each code generation creates a timestamped directory containing:
+
 - `main.py` - The main Python script using boto3
 - `requirements.txt` - All required dependencies
 - `policy.json` - IAM policy with minimum required permissions

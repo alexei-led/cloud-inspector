@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from langchain_core.tracers.context import collect_runs
+from pydantic import BaseModel
 
 from cloud_inspector.prompts import PromptManager
 from langchain_components.models import ModelRegistry
@@ -80,11 +81,15 @@ class CodeGenerationWorkflow:
                 )
 
                 # Create a structured output model with proper tracing
-                structured_model = model.with_structured_output(GeneratedFiles, method="json_mode")
+                structured_output_params = self.model_registry.get_structured_output_params(
+                    model_name, GeneratedFiles
+                )
+                structured_model = model.with_structured_output(
+                    GeneratedFiles, **structured_output_params
+                )
 
                 # Invoke the model with chat messages
                 response = structured_model.invoke(messages)
-
                 # Convert response to dictionary format
                 generated_files = {
                     "main.py": response.main_py,

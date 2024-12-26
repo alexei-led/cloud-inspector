@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import yaml
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 class PromptTemplate(BaseModel):
@@ -31,9 +31,9 @@ class PromptTemplate(BaseModel):
                     """You are an expert AWS developer. Your task is to generate Python code using boto3 for AWS operations.
 
 For any code generation task, you MUST provide three files:
-1. main.py - The main Python script using the latest boto3
-2. requirements.txt - All required dependencies with versions
-3. policy.json - IAM Policy with minimum required permissions
+1. main_py - The main Python script using the latest boto3
+2. requirements_txt - All required dependencies with versions
+3. policy_json - IAM Policy with minimum required permissions
 
 Requirements for code generation:
 1. Use proper error handling with informative error messages
