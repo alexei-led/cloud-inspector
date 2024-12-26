@@ -124,6 +124,10 @@ def list_prompts(ctx: click.Context, tag: Optional[str], service: Optional[str],
     else:  # text format (default)
         # Find maximum name length for alignment
         max_name_length = max(len(p["name"]) for p in available_prompts)
+        
+        click.echo("\nAvailable Prompts:")
+        click.echo("=" * (max_name_length + 40))
+        
         for prompt in available_prompts:
             # Format with aligned description
             formatted_line = f"{prompt['name']:<{max_name_length}}    {prompt['description']}"
@@ -286,6 +290,35 @@ def stats(ctx: click.Context):
         click.echo("-" * 40)
         for error, count in wf_stats["common_errors"].items():
             click.echo(f"{error}: {count} occurrences")
+
+
+# Models Commands
+@cli.group()
+def models():
+    """Manage model configurations."""
+    pass
+
+
+@models.command(name="list")
+@click.pass_context
+def list_models(ctx: click.Context):
+    """List available models."""
+    registry = ctx.obj["registry"]
+    models = registry.list_models()
+    
+    if not models:
+        click.echo("No models configured.")
+        return
+    
+    # Find the longest name for alignment
+    max_name_length = max(len(name) for name in models.keys())
+    
+    click.echo("\nAvailable Models:")
+    click.echo("=" * (max_name_length + 40))
+    
+    # Print each model with aligned columns
+    for name, config in models.items():
+        click.echo(f"{name:<{max_name_length}}    {config['model_id']}")
 
 
 if __name__ == "__main__":
