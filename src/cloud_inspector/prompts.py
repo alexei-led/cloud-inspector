@@ -1,23 +1,68 @@
 """Prompt management system for Cloud Inspector."""
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 import yaml
-from pydantic import BaseModel, Field
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.pydantic_v1 import BaseModel, Field
 
 
 class PromptTemplate(BaseModel):
     """Single prompt template definition."""
+
     service: str = Field(..., description="AWS service (e.g., ec2, s3)")
     operation: str = Field(..., description="Operation type (e.g., list, analyze)")
-    description: str = Field(..., description="Brief description of what the prompt does")
+    description: str = Field(
+        ..., description="Brief description of what the prompt does"
+    )
     template: str = Field(..., description="The actual prompt template")
-    variables: List[str] = Field(default_factory=list, description="Variables required in the template")
+    variables: List[str] = Field(
+        default_factory=list, description="Variables required in the template"
+    )
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+
+    def format_messages(self, variables: Dict[str, Any]) -> List[Any]:
+        """Format the prompt into chat messages."""
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are an expert AWS developer. Your task is to generate Python code using boto3 for AWS operations.
+
+For any code generation task, you MUST provide three files:
+1. main.py - The main Python script using the latest boto3
+2. requirements.txt - All required dependencies with versions
+3. policy.json - IAM Policy with minimum required permissions
+
+Requirements for code generation:
+1. Use proper error handling with informative error messages
+2. Include all necessary imports
+3. Follow AWS security best practices
+4. Add comprehensive type hints
+5. Include detailed docstrings with parameters and return types
+6. Use clear variable names and add comments for complex logic
+7. Make code modular and reusable
+8. Include logging for important operations
+9. Validate input parameters
+10. Handle AWS credentials properly (never hardcode)
+
+Additional Considerations:
+- The code will be used by both humans and AI agents
+- Output should be clear and well-documented
+- Include example usage in docstring
+- Add any relevant security or cost warnings
+- Specify required IAM permissions""",
+                ),
+                ("user", self.template),
+            ]
+        )
+        return prompt.format_messages(**variables)
 
 
 class PromptCollection(BaseModel):
     """Collection of prompt templates."""
+
     prompts: Dict[str, PromptTemplate]
 
 
@@ -56,7 +101,7 @@ class PromptManager:
                 "operation": prompt.operation,
                 "description": prompt.description,
                 "variables": prompt.variables,
-                "tags": prompt.tags
+                "tags": prompt.tags,
             }
             for name, prompt in self.prompts.items()
         ]
@@ -85,7 +130,9 @@ class PromptManager:
         """Get all unique tags from all prompts."""
         return {tag for prompt in self.prompts.values() for tag in prompt.tags}
 
-    def format_prompt(self, name: str, variables: Dict[str, Any]) -> Optional[str]:
+    def format_prompt(
+        self, name: str, variables: Dict[str, Any]
+    ) -> Optional[List[Any]]:
         """Format a prompt template with provided variables."""
         prompt = self.get_prompt(name)
         if not prompt:
@@ -97,7 +144,7 @@ class PromptManager:
             raise ValueError(f"Missing required variables: {missing_vars}")
 
         try:
-            return prompt.template.format(**variables)
+            return prompt.format_messages(variables)
         except KeyError as e:
             raise ValueError(f"Invalid variable in template: {e}")
         except Exception as e:
@@ -134,4 +181,4 @@ class PromptManager:
         except Exception as e:
             errors.append(f"Error validating file: {str(e)}")
 
-        return errors 
+        return errors
