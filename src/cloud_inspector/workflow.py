@@ -207,7 +207,7 @@ class WorkflowManager:
         results = []
 
         # Look for metadata files
-        for meta_file in self.output_dir.glob("*_meta.json"):
+        for meta_file in self.output_dir.rglob("metadata.json"):
             try:
                 with meta_file.open("r") as f:
                     data = json.load(f)
