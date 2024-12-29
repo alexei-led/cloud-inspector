@@ -109,4 +109,41 @@ prompts:
     tags:
       - cloudwatch
       - dashboard
-      - monitoring 
+      - monitoring
+
+  troubleshoot_s3_trigger:
+    service: s3
+    operation: troubleshoot
+    description: "Troubleshoot an S3 bucket trigger issue"
+    template: |
+      Generate Python code using boto3 to troubleshoot the S3 bucket {bucket_name} trigger issue.
+
+      The script should:
+      1. Automatically discover and verify event notification configurations for the specified bucket:
+         - Fetch event notification configuration details.
+         - Identify the target resource (e.g., Lambda, SNS, SQS) linked to the trigger.
+      2. Analyze bucket permissions:
+         - Retrieve and validate the bucket policy.
+         - Inspect associated IAM roles or policies for the triggering service or target resource.
+      3. List and analyze recent CloudTrail logs to confirm S3 events (e.g., PUT operations) are being logged and triggering the configured event.
+      4. Fetch and analyze CloudWatch metrics for the bucket:
+         - Recent PUT operations.
+         - Event notifications triggered.
+      5. Automatically identify and validate the target resource (e.g., Lambda function, SNS topic, or SQS queue):
+         - Confirm its existence and active status.
+         - Fetch its configuration details.
+         - Retrieve recent logs or metrics (e.g., Lambda logs from CloudWatch, SNS topic delivery logs, or SQS message visibility metrics).
+      6. Ensure proper error handling, logging, and comprehensive debugging information.
+      7. Only request user-provided variables if they cannot be discovered programmatically (e.g., AWS region, specific configurations not exposed via APIs).
+
+      Requirements:
+      - Include necessary imports.
+      - Follow AWS best practices.
+      - Add type hints and docstrings.
+      - Ensure the script outputs clear and actionable findings or next steps.
+    variables:
+      - bucket_name
+    tags:
+      - s3
+      - troubleshooting
+      - triggers

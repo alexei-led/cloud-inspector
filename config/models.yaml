@@ -3,46 +3,60 @@ models:
   gpt-4o:
     provider: openai
     model_id: gpt-4o
-    max_tokens: 16384 
+    max_tokens: 16383
     temperature: 0.1
     top_p: 0.9
     frequency_penalty: 0.1
     presence_penalty: 0.1
     response_format:
-      type: object
-      properties:
-        main_py:
-          type: string
-        requirements_txt:
-          type: string
-        policy_json:
-          type: string
-      required:
-        - main_py
-        - requirements_txt
-        - policy_json
+      name: generated_files
+      strict: true
+      schema:
+        type: object
+        properties:
+          main_py:
+            type: string
+            description: The content of the main Python file.
+          requirements_txt:
+            type: string
+            description: The dependencies listed in the requirements.txt file.
+          policy_json:
+            type: string
+            description: The content of the AWS IAM policy JSON file.
+        required:
+          - main_py
+          - requirements_txt
+          - policy_json
+        additionalProperties: false
 
   gpt-4o-mini:
     provider: openai
     model_id: gpt-4o-mini
-    max_tokens: 16384
+    max_tokens: 16383
     temperature: 0.1
     top_p: 0.9
     frequency_penalty: 0.1
     presence_penalty: 0.1
     response_format:
-      type: object
-      properties:
-        main_py:
-          type: string
-        requirements_txt:
-          type: string
-        policy_json:
-          type: string
-      required:
-        - main_py
-        - requirements_txt
-        - policy_json
+      name: generated_files
+      strict: true
+      schema:
+        type: object
+        properties:
+          main_py:
+            type: string
+            description: The content of the main Python file.
+          requirements_txt:
+            type: string
+            description: The dependencies listed in the requirements.txt file.
+          policy_json:
+            type: string
+            description: The content of the AWS IAM policy JSON file.
+        required:
+          - main_py
+          - requirements_txt
+          - policy_json
+        additionalProperties: false
 
   o1:
     provider: openai
@@ -53,18 +67,25 @@ models:
     frequency_penalty: 0.1
     presence_penalty: 0.1
     response_format:
-      type: object
-      properties:
-        main_py:
-          type: string
-        requirements_txt:
-          type: string
-        policy_json:
-          type: string
-      required:
-        - main_py
-        - requirements_txt
-        - policy_json
+      name: generated_files
+      strict: true
+      schema:
+        type: object
+        properties:
+          main_py:
+            type: string
+            description: The content of the main Python file.
+          requirements_txt:
+            type: string
+            description: The dependencies listed in the requirements.txt file.
+          policy_json:
+            type: string
+            description: The content of the AWS IAM policy JSON file.
+        required:
+          - main_py
+          - requirements_txt
+          - policy_json
+        additionalProperties: false
 
   o1-mini:
     provider: openai
@@ -75,18 +96,25 @@ models:
     frequency_penalty: 0.1
     presence_penalty: 0.1
     response_format:
-      type: object
-      properties:
-        main_py:
-          type: string
-        requirements_txt:
-          type: string
-        policy_json:
-          type: string
-      required:
-        - main_py
-        - requirements_txt
-        - policy_json
+      name: generated_files
+      strict: true
+      schema:
+        type: object
+        properties:
+          main_py:
+            type: string
+            description: The content of the main Python file.
+          requirements_txt:
+            type: string
+            description: The dependencies listed in the requirements.txt file.
+          policy_json:
+            type: string
+            description: The content of the AWS IAM policy JSON file.
+        required:
+          - main_py
+          - requirements_txt
+          - policy_json
+        additionalProperties: false
 
   # Anthropic Models (Latest Claude 3.5)
   claude-3-5-sonnet:
