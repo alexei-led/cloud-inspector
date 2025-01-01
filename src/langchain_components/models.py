@@ -114,7 +114,7 @@ class OpenAIStrategy(ProviderStrategy):
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
-        return {"method": "json_mode"}
+        return {"method": "json_mode", "include_raw": True}
 
 
 class AnthropicStrategy(ProviderStrategy):
@@ -152,7 +152,7 @@ class GoogleStrategy(ProviderStrategy):
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
-        return {"include_raw": False}
+        return {"include_raw": True}
 
 
 class OllamaStrategy(ProviderStrategy):

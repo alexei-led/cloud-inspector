@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from langchain_core.tracers.context import collect_runs
 from pydantic import BaseModel
@@ -35,6 +35,19 @@ class WorkflowResult:
     generated_files: Dict[str, str] = None
 
 
+# Constants for token limit detection
+TOKEN_LIMIT_MARKERS = ("maximum context length", "maximum token limit")
+MAX_RETRIES = 5
+CONTINUE_PROMPT = "Please continue providing the remaining files and code."
+
+class TokenLimitError(Exception):
+    """Raised when max token limit is hit and retries are exhausted."""
+    pass
+
+class ParseError(Exception):
+    """Raised when response parsing fails."""
+    pass
+
 class CodeGenerationWorkflow:
     """Workflow for generating code from prompts."""
 
@@ -55,6 +68,60 @@ class CodeGenerationWorkflow:
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def _handle_token_limit_response(
+        self,
+        structured_model: Any,
+        messages: List[Dict[str, str]],
+        initial_response: str,
+    ) -> Dict[str, str]:
+        """Handle responses that hit token limits by continuing the conversation.
+        
+        Args:
+            structured_model: The model to use for generating responses
+            messages: The conversation history
+            initial_response: The initial raw response that hit the token limit
+            
+        Returns:
+            Dict containing the generated files
+            
+        Raises:
+            TokenLimitError: If max retries are exhausted
+            ParseError: If parsing fails for non-token-limit reasons
+        """
+        retry_count = 0
+        accumulated_response = initial_response
+        
+        while retry_count < MAX_RETRIES:
+            messages.extend([
+                {"role": "assistant", "content": accumulated_response},
+                {"role": "user", "content": CONTINUE_PROMPT}
+            ])
+            
+            continuation = structured_model.invoke(messages)
+            if not isinstance(continuation, dict):
+                raise ParseError("Expected dictionary response format")
+                
+            if continuation.get('parsed') is not None:
+                return {
+                    "main.py": self._reformat_code(continuation['parsed'].main_py),
+                    "requirements.txt": self._reformat_code(continuation['parsed'].requirements_txt),
+                    "policy.json": self._reformat_code(continuation['parsed'].policy_json),
+                }
+            
+            raw_response = continuation.get('raw', '').content if isinstance(continuation.get('raw'), AIMessage) else str(continuation.get('raw', ''))
+            accumulated_response += f"\n{raw_response}"
+            
+            # Check if this is still a token limit issue
+            if not any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
+                raise ParseError(f"Failed to parse response after continuation: {raw_response}")
+            
+            retry_count += 1
+            
+        raise TokenLimitError(
+            f"Failed to get complete response after {MAX_RETRIES} retries.\n"
+            f"Accumulated response: {accumulated_response}"
+        )
+
     def execute(
         self, prompt_name: str, model_name: str, variables: Dict[str, Any]
     ) -> WorkflowResult:
@@ -63,45 +130,48 @@ class CodeGenerationWorkflow:
 
         try:
             with collect_runs() as runs_cb:
-                # run name is code_generation_{prompt_name}
                 run_name = f"code_generation_{prompt_name}"
                 tags = ["code_generation", prompt_name, model_name]
 
-                # Load and format prompt
                 messages = self.prompt_manager.format_prompt(prompt_name, variables)
                 if not messages:
                     raise ValueError(f"Prompt '{prompt_name}' not found")
 
-                # Get model and generate code
                 model = self.model_registry.get_model(model_name)
+                model = model.with_config({"run_name": run_name, "tags": tags})
 
-                # pass run_name and tags to the model
-                model = model.with_config(
-                    {"run_name": run_name, "tags": tags}
-                )
-
-                # Create a structured output model with proper tracing
                 structured_output_params = self.model_registry.get_structured_output_params(
                     model_name, GeneratedFiles
                 )
+                if not structured_output_params.get("include_raw"):
+                    raise ValueError("include_raw must be True in model definition for token limit handling")
+                
                 structured_model = model.with_structured_output(
                     GeneratedFiles, **structured_output_params
                 )
 
-                # Invoke the model with chat messages
                 response = structured_model.invoke(messages)
-                # Convert response to dictionary format
-                generated_files = {
-                    "main.py": self._reformat_code(response.main_py),
-                    "requirements.txt": self._reformat_code(response.requirements_txt),
-                    "policy.json": self._reformat_code(response.policy_json),
-                }
+                if not isinstance(response, dict):
+                    raise ParseError("Expected dictionary response format")
 
-                # Parse the main Python code
+                if response.get('parsed') is not None:
+                    generated_files = {
+                        "main.py": self._reformat_code(response['parsed'].main_py),
+                        "requirements.txt": self._reformat_code(response['parsed'].requirements_txt),
+                        "policy.json": self._reformat_code(response['parsed'].policy_json),
+                    }
+                else:
+                    raw_response = response.get('raw', '').content if isinstance(response.get('raw'), AIMessage) else str(response.get('raw', ''))
+                    if any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
+                        generated_files = self._handle_token_limit_response(
+                            structured_model, messages, raw_response
+                        )
+                    else:
+                        raise ParseError(f"Failed to parse response: {raw_response}")
+
                 code_result = self.code_parser.parse(generated_files["main.py"])
                 metadata = self.metadata_parser.parse(str(response))
 
-                # Create result
                 result = WorkflowResult(
                     prompt_name=prompt_name,
                     model_name=model_name,
@@ -114,9 +184,7 @@ class CodeGenerationWorkflow:
                     generated_files=generated_files,
                 )
 
-                # Save result
                 self._save_result(result)
-
                 return result
 
         except Exception as e:
