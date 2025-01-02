@@ -196,7 +196,7 @@ class BedrockStrategy(ProviderStrategy):
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
-        return {}
+        return {"include_raw": True}
 
 
 class ModelRegistry:

@@ -188,7 +188,7 @@ models:
   # AWS Bedrock Models
   claude-3-5-sonnet-bedrock:
     provider: bedrock
-    model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+    model_id: us.anthropic.claude-3-5-sonnet-20241022-v2:0
     max_tokens: 4096
     temperature: 0.1
     top_p: 0.9
@@ -196,7 +196,7 @@ models:
 
   nova-micro:
     provider: bedrock
-    model_id: amazon.nova-micro-v1:0:128k
+    model_id: us.amazon.nova-micro-v1:0
     max_tokens: 5120
     temperature: 0.1
     top_p: 0.9
@@ -204,7 +204,7 @@ models:
 
   nova-pro:
     provider: bedrock
-    model_id: amazon.nova-pro-v1:0:300k
+    model_id: us.amazon.nova-pro-v1:0
     max_tokens: 5120
     temperature: 0.1
     top_p: 0.9
