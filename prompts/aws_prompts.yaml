@@ -147,3 +147,67 @@ prompts:
       - s3
       - troubleshooting
       - triggers
+
+  # EC2 Prompts
+  troubleshoot_ec2_connection:
+    service: ec2
+    operation: troubleshoot
+    description: "Diagnose and resolve connectivity issues with an EC2 instance."
+    template: |
+      Generate Python code using boto3 to diagnose and troubleshoot connectivity issues for the EC2 instance with ID "{instance_id}" in region "{region}".
+
+      The script should:
+      1. **Verify the instance's current state**:
+         - Fetch instance details, including state (running/stopped), public/private IP addresses, security groups, and network interface details.
+      2. **Check security group configurations**:
+         - List the security groups attached to the instance.
+         - Verify inbound and outbound rules for the necessary ports (e.g., SSH on port 22 for Linux, RDP on port 3389 for Windows).
+         - Ensure no overly restrictive rules are blocking traffic (e.g., 0.0.0.0/0 on SSH or RDP).
+      3. **Inspect Network ACLs**:
+         - Fetch the network ACLs associated with the subnet and verify inbound and outbound rules.
+         - Ensure there are no conflicting rules that might block traffic to/from the instance.
+      4. **Check routing table configurations**:
+         - Retrieve the routing table associated with the instance's subnet.
+         - Ensure there is a route to the internet (for public instances) or to the required VPC resources (for private instances).
+         - Verify that the subnet has a route to the Internet Gateway (IGW) for public instances or a NAT Gateway for private instances.
+      5. **Verify the VPC and subnet settings**:
+         - Ensure the subnet is configured for public access (if needed) by checking for an associated Internet Gateway (IGW).
+         - Confirm that the instance's network interface is assigned a public IP if public access is required.
+         - Check that the subnet's route table is correctly configured.
+      6. **Retrieve and analyze CloudWatch metrics for the instance**:
+         - Network traffic (in/out).
+         - CPU utilization.
+         - Disk I/O.
+         - Ensure there are no unusual spikes or bottlenecks in the metrics that could be causing connectivity issues.
+      7. **Check the instance's system logs**:
+         - Fetch recent system logs (via EC2 console or AWS Systems Manager) to check for any error messages related to networking, security, or instance health.
+      8. **Use AWS Reachability Analyzer**:
+         - Simulate connectivity tests to/from the instance.
+         - Check for any routing issues or network misconfigurations.
+         - Provide details on any detected network reachability issues.
+      9. **Inspect IAM roles associated with the instance**:
+         - Ensure that the instance has the necessary IAM role attached to it for required actions (e.g., Systems Manager, CloudWatch Logs).
+         - Verify the role has permissions for networking diagnostics if needed.
+      10. **Analyze CloudTrail logs**:
+         - Retrieve and analyze CloudTrail logs to check for any changes in security groups, route tables, or networking settings that might have affected the instance's connectivity.
+         - Identify any suspicious or unexpected actions that could have led to the issue.
+      11. **Check Elastic IP (EIP) association** (if applicable):
+         - If the instance is expected to have a static public IP, verify that an Elastic IP (EIP) is correctly associated with the instance.
+         - Ensure that the EIP is not disassociated or blocked by any security groups or ACLs.
+      12. **Actionable recommendations**:
+         - Based on the findings, provide recommendations to fix the identified misconfigurations (e.g., modifying security group rules, adjusting route table entries, re-associating EIP).
+
+      Requirements:
+      1. Use proper error handling.
+      2. Include necessary imports.
+      3. Follow AWS best practices.
+      4. Add type hints.
+      5. Add docstrings.
+    variables:
+      - instance_id
+      - region
+    tags:
+      - ec2
+      - troubleshooting
+      - connectivity
+      - misconfigurations

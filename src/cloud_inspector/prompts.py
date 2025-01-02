@@ -15,34 +15,79 @@ Always respond in the following JSON structure: {{ "main_py": "string", "require
 
 GUIDELINES
 1. CODE REQUIREMENTS
-   - Generate Python code using `boto3` that is concise and efficient.
-   - Use Python type hints, clear variable names, and modular functions.
-   - Import all necessary modules required for the task, ensuring the script is executable without missing imports (e.g., datetime, boto3, logging, etc.).
+   - Generate Python code using `boto3` that is concise, efficient, and ready for execution without requiring human intervention or review.
+   - Use Python type hints, clear variable names, and modular functions. Avoid placeholder or incomplete code.
    - Avoid unnecessary comments or overly verbose explanations in the code.
+   - Import all necessary modules required for the task, ensuring the script is self-contained and executable without missing imports (e.g., `datetime`, `boto3`, `logging`, etc.). For example when using `datetime` or `timedelta` use `from datetime import datetime, timedelta`.
+   - If a specific feature cannot be implemented (e.g., due to AWS service limitations), omit the function entirely and log a clear explanation.
 
-2. ERROR HANDLING
-   - Implement basic error handling with clear and actionable error messages.
+2. OUTPUT GENERATION IN LLM-FRIENDLY FORMAT
+   - The script must produce its execution output in a format optimized for LLM consumption.
+   - Use a structured JSON format for the output, ensuring it is easy to parse and interpret.
+   - Provide meaningful and categorized information, such as `instance_details`, `security_group_analysis`, `network_acl_analysis`, and `cloudwatch_metrics`.
+   - Include clear descriptions of any identified issues or recommendations in the JSON output.
+   - Example structure:
+     ```json
+     {{
+       "instance_details": {{ ... }},
+       "security_groups": {{ "inbound_rules": [...], "outbound_rules": [...] }},
+       "network_acls": {{ "details": [...] }},
+       "cloudwatch_metrics": {{ "CPUUtilization": [...], "NetworkIn": [...] }},
+       "issues_found": ["Port 22 is closed", "No route to Internet Gateway"],
+       "recommendations": ["Open port 22 in security group", "Add a route to Internet Gateway in the subnet's route table"]
+     }}
+     ```
 
-3. AWS BEST PRACTICES
+3. ERROR HANDLING
+   - Implement robust error handling with actionable error messages. Ensure that errors in one function do not terminate the script, allowing it to collect as much data as possible.
+   - Log errors in a separate key, such as `"errors": [...]`, in the JSON output for transparency.
+
+4. AWS BEST PRACTICES
    - Pass the AWS region as a parameter if required by the API.
-   - Use the AWS SDK default credential provider chain, but allow the AWS profile to be passed as an optional parameter to select the desired profile "boto3.Session(profile_name='your-profile')".
+   - Use the AWS SDK default credential provider chain, but allow the AWS profile to be passed as an optional parameter to select the desired profile (`boto3.Session(profile_name='your-profile')`).
    - Handle large datasets with pagination or streaming where applicable.
-   - Dynamically discover ARNs instead of using invented or hardcoded ARNs. For example, if you need to interact with Lambda, SNS, or SQS, use methods to list or describe the resources dynamically.
+   - Dynamically discover ARNs instead of using invented or hardcoded values. Avoid placeholder values like `CommandId='your-command-id'`.
 
-4. DEPENDENCIES
-   - Ensure that the requirements.txt includes all required dependencies, with pinned versions. This should include boto3, botocore, and any other necessary packages.
+5. DEPENDENCIES
+   - Ensure that the `requirements.txt` includes all required dependencies with pinned versions. This should include `boto3` and any other necessary packages.
 
-5. OUTPUT EXPECTATIONS
-   - main_py: A minimal Python script that fulfills the task without excessive complexity.
+6. OUTPUT EXPECTATIONS
+   - main_py: A fully implemented Python script that fulfills the task without excessive complexity or missing functionality.
    - requirements_txt: Include only necessary dependencies with pinned versions.
    - policy_json: Provide an IAM policy granting the least privileges needed for the operation.
 
-6. AVOID EXCESSIVE TOKEN USAGE
+7. AVOID EXCESSIVE TOKEN USAGE
    - Prioritize compact, functional code over verbose explanations or redundant logic.
-   - Avoid unnecessary docstrings unless explicitly requested.
+   - Avoid placeholder or incomplete functions. All functionality should be either implemented or excluded.
 
-7. TESTING AND USABILITY
+8. TESTING AND USABILITY
    - Include a basic example of how to execute the script with test inputs.
+   - The generated code must be executable without manual fixes or placeholder replacements.
+
+9. ADDITIONAL REQUIREMENTS
+   - Ensure robustness: If one function encounters an error, the script must log the issue and proceed with other tasks.
+   - Eliminate all placeholder values or non-existent resource IDs. Use dynamic resource discovery or provide clear instructions for missing inputs.
+   - Import all required libraries and ensure that no missing imports cause runtime failures.
+
+10. CUSTOM JSON ENCODER FOR TYPES
+   - For any custom types that do not natively support JSON serialization (such as `datetime`), use a custom JSON encoder. For example:
+     ```python
+     from datetime import datetime
+     import json
+
+     class DateTimeEncoder(json.JSONEncoder):
+         def default(self, obj):
+             if isinstance(obj, datetime):
+                 return obj.isoformat()
+             if isinstance(obj, timedelta):
+                 return str(obj)
+             return super().default(obj)
+
+     # Use it like this:
+     print(json.dumps(results, indent=4, cls=DateTimeEncoder))
+     ```
+
+GOAL: The generated code must be correct, complete, and robust, designed to run automatically without human review or intervention. The **output produced by the script** must be in a **structured, LLM-friendly JSON format** that is easy to parse, interpret, and use for service troubleshooting.
 """
 
 class PromptTemplate(BaseModel):
