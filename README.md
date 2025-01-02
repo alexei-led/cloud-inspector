@@ -130,6 +130,7 @@ generated_code/
 ### Performance Monitoring
 
 All code generation runs are automatically tracked in LangSmith. You can:
+
 - View detailed traces of each run
 - Monitor token usage and costs
 - Compare performance across different models

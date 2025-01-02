@@ -44,37 +44,6 @@
 
 Generate a detailed task list for implementing this project. The task list should include specific coding tasks, testing tasks, and documentation tasks. Organize the tasks into logical phases (e.g., setup, prompt management, LLM integration, code generation, review/correction, output management, testing, documentation). For each task provide short description and expected outcome.
 
-**Project Structure Suggestion:**
-
-Suggest a suitable project structure (directories and files) for this project. Consider modularity, maintainability, and extensibility.
-
-**Example Project structure:**
-
-```shell
-llm-code-comparison/
-├── prompts/              # Store input prompts
-├── generated_code/       # Store generated code (subfolders for each LLM)
-│   ├── openai/
-│   ├── gemini/
-│   └── ...
-├── llm_integrations/    # Modules for interacting with different LLM APIs
-│   ├── openai_api.py
-│   ├── gemini_api.py
-│   └── ...
-├── code_review/        # Modules for code review and correction
-│   ├── static_analysis.py
-│   ├── llm_review.py
-│   └── ...
-├── utils/                 # Utility functions
-│   ├── prompt_utils.py
-│   ├── output_utils.py
-│   └── ...
-├── tests/                # Unit and integration tests
-├── main.py               # Main script to run the comparison
-├── requirements.txt
-└── README.md
-```
-
 **Output format:**
 
 Use Markdown format for the task list and project structure.
