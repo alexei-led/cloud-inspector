@@ -1,32 +1,33 @@
 """Workflow system for code generation."""
 
+# Standard library imports
+import ast
+import json
 from dataclasses import dataclass
 from datetime import datetime
-import json
+from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
+# Third-party imports
+import autopep8
+import pyflakes.api
+from autoflake import fix_code
+from black import FileMode, format_str
+from langchain_core.messages.base import BaseMessage
 from langchain_core.tracers.context import collect_runs
-from pydantic import BaseModel
 
+# Local imports
 from cloud_inspector.prompts import PromptManager
 from langchain_components.models import ModelRegistry
-from langchain_components.parsers import (
-    CodeParseResult,
-    PythonCodeParser,
-    MetadataParser,
-)
 from langchain_components.templates import GeneratedFiles
 
 
 @dataclass
 class WorkflowResult:
     """Result of a workflow execution."""
-
     prompt_name: str
     model_name: str
-    code_result: CodeParseResult
-    metadata: Dict[str, Any]
     timestamp: datetime
     execution_time: float
     success: bool
@@ -62,8 +63,6 @@ class CodeGenerationWorkflow:
         self.model_registry = model_registry
         self.project_name = project_name
         self.output_dir = output_dir or Path("generated_code")
-        self.code_parser = PythonCodeParser()
-        self.metadata_parser = MetadataParser()
 
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -74,20 +73,7 @@ class CodeGenerationWorkflow:
         messages: List[Dict[str, str]],
         initial_response: str,
     ) -> Dict[str, str]:
-        """Handle responses that hit token limits by continuing the conversation.
-        
-        Args:
-            structured_model: The model to use for generating responses
-            messages: The conversation history
-            initial_response: The initial raw response that hit the token limit
-            
-        Returns:
-            Dict containing the generated files
-            
-        Raises:
-            TokenLimitError: If max retries are exhausted
-            ParseError: If parsing fails for non-token-limit reasons
-        """
+        """Handle responses that hit token limits by continuing the conversation."""
         retry_count = 0
         accumulated_response = initial_response
         
@@ -108,7 +94,7 @@ class CodeGenerationWorkflow:
                     "policy.json": self._reformat_code(continuation['parsed'].policy_json),
                 }
             
-            raw_response = continuation.get('raw', '').content if isinstance(continuation.get('raw'), AIMessage) else str(continuation.get('raw', ''))
+            raw_response = continuation.get('raw', '').content if isinstance(continuation.get('raw'), BaseMessage) else str(continuation.get('raw', ''))
             accumulated_response += f"\n{raw_response}"
             
             # Check if this is still a token limit issue
@@ -156,12 +142,12 @@ class CodeGenerationWorkflow:
 
                 if response.get('parsed') is not None:
                     generated_files = {
-                        "main.py": self._reformat_code(response['parsed'].main_py),
+                        "main.py": self._reformat_code(response['parsed'].main_py, code=True),
                         "requirements.txt": self._reformat_code(response['parsed'].requirements_txt),
                         "policy.json": self._reformat_code(response['parsed'].policy_json),
                     }
                 else:
-                    raw_response = response.get('raw', '').content if isinstance(response.get('raw'), AIMessage) else str(response.get('raw', ''))
+                    raw_response = response.get('raw', '').content if isinstance(response.get('raw'), BaseMessage) else str(response.get('raw', ''))
                     if any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
                         generated_files = self._handle_token_limit_response(
                             structured_model, messages, raw_response
@@ -169,14 +155,9 @@ class CodeGenerationWorkflow:
                     else:
                         raise ParseError(f"Failed to parse response: {raw_response}")
 
-                code_result = self.code_parser.parse(generated_files["main.py"])
-                metadata = self.metadata_parser.parse(str(response))
-
                 result = WorkflowResult(
                     prompt_name=prompt_name,
                     model_name=model_name,
-                    code_result=code_result,
-                    metadata=metadata,
                     timestamp=start_time,
                     execution_time=(datetime.now() - start_time).total_seconds(),
                     success=True,
@@ -191,16 +172,6 @@ class CodeGenerationWorkflow:
             return WorkflowResult(
                 prompt_name=prompt_name,
                 model_name=model_name,
-                code_result=CodeParseResult(
-                    code="",
-                    imports=set(),
-                    boto3_services=set(),
-                    syntax_valid=False,
-                    errors=[str(e)],
-                    security_risks=[],
-                    dependencies=set(),
-                ),
-                metadata={},
                 timestamp=start_time,
                 execution_time=(datetime.now() - start_time).total_seconds(),
                 success=False,
@@ -208,9 +179,44 @@ class CodeGenerationWorkflow:
                 generated_files={},
             )
 
-    def _reformat_code(self, model_response: str) -> str:
-        """Reformat code by properly handling escaped characters."""
+    def _reformat_code(self, model_response: str, code: bool=False) -> str:
+        """Reformat code by properly handling escaped characters and fix common Python issues."""
         decoded = bytes(model_response.encode('utf-8').decode('unicode-escape').encode('utf-8')).decode('utf-8')
+        
+        # Only process Python files
+        if not code:
+            return decoded
+
+        try:
+            # Validate Python syntax
+            ast.parse(decoded)
+            
+            # Run pyflakes to detect issues
+            reporter = StringIO()
+            pyflakes.api.check(decoded, 'generated_code', reporter)
+            
+            # Fix imports automatically
+            decoded = fix_code(
+                decoded,
+                remove_all_unused_imports=True,
+                remove_unused_variables=True,
+                expand_star_imports=True,  # Expand * imports for better clarity
+            )
+            
+            # Apply autopep8 fixes for other issues
+            decoded = autopep8.fix_code(decoded, options={
+                'aggressive': 2,  # More aggressive fixes
+                'max_line_length': 100,
+            })
+            
+            # Final formatting with black
+            decoded = format_str(decoded, mode=FileMode())
+            
+        except SyntaxError as e:
+            print(f"Warning: Generated Python code has syntax errors: {e}")
+        except Exception as e:
+            print(f"Warning: Code formatting failed: {e}")
+        
         return decoded
 
     def _save_result(self, result: WorkflowResult) -> None:
@@ -242,15 +248,6 @@ class CodeGenerationWorkflow:
                     "success": result.success,
                     "error": result.error,
                     "run_id": str(result.run_id) if result.run_id else None,
-                    "metadata": result.metadata,
-                    "code_info": {
-                        "imports": list(result.code_result.imports),
-                        "boto3_services": list(result.code_result.boto3_services),
-                        "syntax_valid": result.code_result.syntax_valid,
-                        "errors": result.code_result.errors,
-                        "security_risks": result.code_result.security_risks,
-                        "dependencies": list(result.code_result.dependencies),
-                    },
                 },
                 f,
                 indent=2,

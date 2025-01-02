@@ -21,6 +21,10 @@ anyio==4.7.0
     #   openai
 attrs==24.3.0
     # via aiohttp
+autoflake==2.3.1
+    # via -r requirements.in
+autopep8==2.3.1
+    # via -r requirements.in
 boto3==1.35.87
     # via
     #   -r requirements.in
@@ -182,6 +186,8 @@ pyasn1==0.6.1
     #   rsa
 pyasn1-modules==0.4.1
     # via google-auth
+pycodestyle==2.12.1
+    # via autopep8
 pydantic==2.10.4
     # via
     #   -r requirements.in
@@ -197,6 +203,8 @@ pydantic==2.10.4
     #   openai
 pydantic-core==2.27.2
     # via pydantic
+pyflakes==3.2.0
+    # via autoflake
 pyparsing==3.2.0
     # via httplib2
 python-dateutil==2.9.0.post0

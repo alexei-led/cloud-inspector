@@ -231,18 +231,6 @@ def generate(ctx: click.Context, prompt_name: str, model: str, var: tuple[str, .
             click.echo("-" * 80)
             click.echo(content)
 
-        click.echo("\nMetadata:")
-        click.echo("-" * 80)
-        click.echo(f"AWS Services: {result.code_result.boto3_services}")
-        click.echo(f"Required Permissions: {result.metadata.get('permissions', [])}")
-        click.echo(f"Complexity: {result.metadata.get('complexity', 'unknown')}")
-
-        if result.code_result.security_risks:
-            click.echo("\nSecurity Risks:")
-            click.echo("-" * 80)
-            for risk in result.code_result.security_risks:
-                click.echo(f"⚠️  {risk}")
-
         # Show where files were saved
         output_dir = (
             flow.output_dir
