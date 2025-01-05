@@ -192,7 +192,8 @@ class BedrockStrategy(ProviderStrategy):
             ),
             credentials_profile_name=os.getenv(provider_config.profile_env),
             model_id=model_config.common.model_id,
-            model_kwargs=params
+            model_kwargs=params,
+            beta_use_converse_api=True
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:

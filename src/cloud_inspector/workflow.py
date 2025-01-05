@@ -6,16 +6,19 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 # Third-party imports
 import autopep8
-import pyflakes.api
+from pyflakes.api import check
+from pyflakes.reporter import Reporter
 from autoflake import fix_code
 from black import FileMode, format_str
 from langchain_core.messages.base import BaseMessage
 from langchain_core.tracers.context import collect_runs
+from pyparsing import C
 
 # Local imports
 from cloud_inspector.prompts import PromptManager
@@ -89,7 +92,7 @@ class CodeGenerationWorkflow:
                 
             if continuation.get('parsed') is not None:
                 return {
-                    "main.py": self._reformat_code(continuation['parsed'].main_py),
+                    "main.py": self._reformat_code(continuation['parsed'].main_py, Code=True),
                     "requirements.txt": self._reformat_code(continuation['parsed'].requirements_txt),
                     "policy.json": self._reformat_code(continuation['parsed'].policy_json),
                 }
@@ -107,6 +110,28 @@ class CodeGenerationWorkflow:
             f"Failed to get complete response after {MAX_RETRIES} retries.\n"
             f"Accumulated response: {accumulated_response}"
         )
+    
+    def _extract_latest_generated_files(self, raw_response: Union[str, List[dict]]) -> Dict[str, str]:
+        """Extract latest GeneratedFiles content from Nova model response."""
+        # Parse response if string
+        messages = json.loads(raw_response) if isinstance(raw_response, str) else raw_response
+        # Track latest content
+        latest_files = {
+            'main_py': '',
+            'requirements_txt': '',
+            'policy_json': ''
+        }
+        # Scan all messages, overriding with latest content
+        for msg in messages:
+            if msg.get('type') == 'tool_use' and msg.get('name') == 'GeneratedFiles':
+                input_data = msg.get('input', {})
+                for key in latest_files:
+                    if key in input_data and input_data[key]:
+                        latest_files[key] = input_data[key]
+
+        if not any(latest_files.values()):
+            raise ParseError("No GeneratedFiles content found")
+        return latest_files
 
     def execute(
         self, prompt_name: str, model_name: str, variables: Dict[str, Any]
@@ -144,16 +169,20 @@ class CodeGenerationWorkflow:
                     generated_files = {
                         "main.py": self._reformat_code(response['parsed'].main_py, code=True),
                         "requirements.txt": self._reformat_code(response['parsed'].requirements_txt),
-                        "policy.json": self._reformat_code(response['parsed'].policy_json),
+                        "policy.json": (response['parsed'].policy_json
+                                        if isinstance(response['parsed'].policy_json, dict)
+                                        else self._reformat_code(response['parsed'].policy_json)),
                     }
                 else:
                     raw_response = response.get('raw', '').content if isinstance(response.get('raw'), BaseMessage) else str(response.get('raw', ''))
-                    if any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
-                        generated_files = self._handle_token_limit_response(
-                            structured_model, messages, raw_response
-                        )
-                    else:
-                        raise ParseError(f"Failed to parse response: {raw_response}")
+                    latest_files = self._extract_latest_generated_files(raw_response)
+                    generated_files = {
+                        "main.py": self._reformat_code(latest_files['main_py'], code=True),
+                        "requirements.txt": self._reformat_code(latest_files['requirements_txt']),
+                        "policy.json": (latest_files['policy_json'] 
+                                        if isinstance(latest_files['policy_json'], dict) 
+                                        else self._reformat_code(latest_files['policy_json'])),
+                    }
 
                 result = WorkflowResult(
                     prompt_name=prompt_name,
@@ -192,8 +221,12 @@ class CodeGenerationWorkflow:
             ast.parse(decoded)
             
             # Run pyflakes to detect issues
-            reporter = StringIO()
-            pyflakes.api.check(decoded, 'generated_code', reporter)
+            error_output = StringIO()
+            reporter = Reporter(StringIO(), error_output)
+            check(decoded, 'generated_code', reporter)
+
+            if error_output.getvalue():
+                print(f"Pyflakes detected issues:\n{error_output.getvalue()}")
             
             # Fix imports automatically
             decoded = fix_code(
@@ -232,9 +265,17 @@ class CodeGenerationWorkflow:
         # Save generated files
         if result.generated_files:
             for filename, content in result.generated_files.items():
-                file_path = run_dir / filename
-                with file_path.open("w") as f:
-                    f.write(content)
+                try:
+                    file_path = run_dir / filename
+                    if filename.endswith('.json') and isinstance(content, dict):
+                        with open(file_path, 'w') as f:
+                            json.dump(content, f, indent=2)
+                    else:
+                        with open(file_path, 'w') as f:
+                            f.write(content)
+                            f.flush()
+                except Exception as e:
+                    print(f"Error saving {filename}: {e}")
 
         # Save metadata
         meta_file = run_dir / "metadata.json"
