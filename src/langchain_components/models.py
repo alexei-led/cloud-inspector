@@ -1,9 +1,11 @@
 """Model registry for Cloud Inspector."""
+
 import os
 import yaml
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, List
+from enum import Enum
 
 from langchain_openai.chat_models.base import ChatOpenAI
 from langchain_anthropic.chat_models import ChatAnthropic
@@ -14,18 +16,26 @@ from langchain.schema.language_model import BaseLanguageModel
 from pydantic import BaseModel, SecretStr
 
 
+class ModelCapability(Enum):
+    CODE_GENERATION = "code_generation"
+    PROMPT_GENERATION = "prompt_generation"
+
+
 class CommonModelParams(BaseModel):
     """Common parameters for all models."""
+
     model_id: str
+    capabilities: List[ModelCapability]
     max_tokens: int
-    temperature: float
-    top_p: float
+    temperature: Optional[float] = None
+    top_p: Optional[float] = None
     top_k: Optional[int] = None
     stop: Optional[list[str]] = None
 
 
 class OpenAIParams(BaseModel):
     """OpenAI-specific parameters."""
+
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     response_format: Optional[Dict[str, Any]] = None
@@ -33,24 +43,31 @@ class OpenAIParams(BaseModel):
 
 class OllamaParams(BaseModel):
     """Ollama-specific parameters."""
+
     repeat_penalty: Optional[float] = None
-    
+
+
 class GoogleParams(BaseModel):
     """Google-specific parameters."""
+
     response_schema: Optional[Dict[str, Any]] = None
     response_mime_type: Optional[str] = None
 
 
 class ModelConfig(BaseModel):
     """Model configuration."""
+
     provider: str
     common: CommonModelParams
     openai: Optional[OpenAIParams] = None
     ollama: Optional[OllamaParams] = None
     google: Optional[GoogleParams] = None
+    supports_system_prompt: bool = True
+
 
 class ProviderConfig(BaseModel):
     """Provider configuration."""
+
     api_key_env: Optional[str] = None
     organization_env: Optional[str] = None
     base_url_env: Optional[str] = None
@@ -62,7 +79,7 @@ class ProviderConfig(BaseModel):
 
 class ProviderStrategy(ABC):
     """Abstract base class for provider-specific strategies."""
-    
+
     @abstractmethod
     def create_model(
         self,
@@ -82,9 +99,11 @@ class ProviderStrategy(ABC):
         params = {
             "model": common.model_id,
             "max_tokens": common.max_tokens,
-            "temperature": common.temperature,
-            "top_p": common.top_p,
         }
+        if common.temperature is not None:
+            params["temperature"] = common.temperature
+        if common.top_p is not None:
+            params["top_p"] = common.top_p
         if common.top_k is not None:
             params["top_k"] = common.top_k
         if common.stop is not None:
@@ -100,17 +119,21 @@ class OpenAIStrategy(ProviderStrategy):
     ) -> BaseLanguageModel:
         params = self._get_common_params(model_config.common)
         model_kwargs = {}
-        
+
         if model_config.openai and model_config.openai.response_format:
             model_kwargs["response_format"] = model_config.openai.response_format
 
         return ChatOpenAI(
             openai_api_key=os.getenv(provider_config.api_key_env),
             openai_organization=os.getenv(provider_config.organization_env),
-            frequency_penalty=model_config.openai.frequency_penalty if model_config.openai else None,
-            presence_penalty=model_config.openai.presence_penalty if model_config.openai else None,
+            frequency_penalty=(
+                model_config.openai.frequency_penalty if model_config.openai else None
+            ),
+            presence_penalty=(
+                model_config.openai.presence_penalty if model_config.openai else None
+            ),
             model_kwargs=model_kwargs,
-            **params
+            **params,
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
@@ -126,7 +149,7 @@ class AnthropicStrategy(ProviderStrategy):
         params = self._get_common_params(model_config.common)
         return ChatAnthropic(
             anthropic_api_key=SecretStr(os.getenv(provider_config.api_key_env)),
-            **params
+            **params,
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
@@ -147,8 +170,7 @@ class GoogleStrategy(ProviderStrategy):
                 params["response_mime_type"] = model_config.google.response_mime_type
 
         return ChatGoogleGenerativeAI(
-            google_api_key=SecretStr(os.getenv(provider_config.api_key_env)),
-            **params
+            google_api_key=SecretStr(os.getenv(provider_config.api_key_env)), **params
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
@@ -166,13 +188,9 @@ class OllamaStrategy(ProviderStrategy):
             params["repeat_penalty"] = model_config.ollama.repeat_penalty
 
         base_url = os.getenv(
-            provider_config.base_url_env,
-            provider_config.default_base_url
+            provider_config.base_url_env, provider_config.default_base_url
         )
-        return ChatOllama(
-            base_url=base_url,
-            **params
-        )
+        return ChatOllama(base_url=base_url, **params)
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
         return {"method": "json_mode"}
@@ -187,13 +205,12 @@ class BedrockStrategy(ProviderStrategy):
         params = self._get_common_params(model_config.common)
         return ChatBedrock(
             region_name=os.getenv(
-                provider_config.region_env,
-                provider_config.default_region
+                provider_config.region_env, provider_config.default_region
             ),
             credentials_profile_name=os.getenv(provider_config.profile_env),
             model_id=model_config.common.model_id,
             model_kwargs=params,
-            beta_use_converse_api=True
+            beta_use_converse_api=True,
         )
 
     def get_structured_output_params(self, output_type: Type) -> Dict[str, Any]:
@@ -229,12 +246,19 @@ class ModelRegistry:
         for name, model_data in config["models"].items():
             common_params = {
                 "model_id": model_data["model_id"],
+                "capabilities": model_data["capabilities"],
                 "max_tokens": model_data["max_tokens"],
-                "temperature": model_data["temperature"],
-                "top_p": model_data["top_p"],
-                "top_k": model_data.get("top_k"),
-                "stop": model_data.get("stop"),
             }
+
+            # Only add optional parameters if they exist
+            if "temperature" in model_data:
+                common_params["temperature"] = model_data["temperature"]
+            if "top_p" in model_data:
+                common_params["top_p"] = model_data["top_p"]
+            if "top_k" in model_data:
+                common_params["top_k"] = model_data["top_k"]
+            if "stop" in model_data:
+                common_params["stop"] = model_data["stop"]
 
             provider_specific = {}
             if model_data["provider"] == "openai":
@@ -256,7 +280,8 @@ class ModelRegistry:
             self.models[name] = ModelConfig(
                 provider=model_data["provider"],
                 common=CommonModelParams(**common_params),
-                **provider_specific
+                **provider_specific,
+                supports_system_prompt=model_data.get("supports_system_prompt", True),
             )
 
         # Load provider configs
@@ -277,7 +302,9 @@ class ModelRegistry:
 
         return strategy.create_model(model_config, provider_config)
 
-    def get_structured_output_params(self, name: str, output_type: Type) -> Dict[str, Any]:
+    def get_structured_output_params(
+        self, name: str, output_type: Type
+    ) -> Dict[str, Any]:
         """Get structured output parameters for a specific model."""
         if name not in self.models:
             raise ValueError(f"Model '{name}' not found in configuration")
@@ -297,7 +324,7 @@ class ModelRegistry:
                 "model_id": model.common.model_id,
                 "max_tokens": model.common.max_tokens,
                 "temperature": model.common.temperature,
-                "top_p": model.common.top_p
+                "top_p": model.common.top_p,
             }
             for name, model in self.models.items()
         }
@@ -307,4 +334,23 @@ class ModelRegistry:
         return {
             name: provider.model_dump(exclude_none=True)
             for name, provider in self.provider_configs.items()
-        } 
+        }
+
+    def get_models_by_capability(
+        self, capability: ModelCapability
+    ) -> Dict[str, ModelConfig]:
+        """Get all models that have a specific capability."""
+        return {
+            name: config
+            for name, config in self.models.items()
+            if capability in config.common.capabilities
+        }
+
+    def validate_model_capability(
+        self, model_name: str, required_capability: ModelCapability
+    ) -> bool:
+        """Check if a model has a specific capability."""
+        if model_name not in self.models:
+            raise ValueError(f"Model '{model_name}' not found")
+
+        return required_capability in self.models[model_name].common.capabilities

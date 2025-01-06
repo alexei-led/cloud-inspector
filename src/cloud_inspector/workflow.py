@@ -6,7 +6,6 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
-import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -18,17 +17,17 @@ from autoflake import fix_code
 from black import FileMode, format_str
 from langchain_core.messages.base import BaseMessage
 from langchain_core.tracers.context import collect_runs
-from pyparsing import C
 
 # Local imports
 from cloud_inspector.prompts import PromptManager
-from langchain_components.models import ModelRegistry
+from langchain_components.models import ModelRegistry, ModelCapability
 from langchain_components.templates import GeneratedFiles
 
 
 @dataclass
 class WorkflowResult:
     """Result of a workflow execution."""
+
     prompt_name: str
     model_name: str
     timestamp: datetime
@@ -44,13 +43,18 @@ TOKEN_LIMIT_MARKERS = ("maximum context length", "maximum token limit")
 MAX_RETRIES = 5
 CONTINUE_PROMPT = "Please continue providing the remaining files and code."
 
+
 class TokenLimitError(Exception):
     """Raised when max token limit is hit and retries are exhausted."""
+
     pass
+
 
 class ParseError(Exception):
     """Raised when response parsing fails."""
+
     pass
+
 
 class CodeGenerationWorkflow:
     """Workflow for generating code from prompts."""
@@ -79,52 +83,68 @@ class CodeGenerationWorkflow:
         """Handle responses that hit token limits by continuing the conversation."""
         retry_count = 0
         accumulated_response = initial_response
-        
+
         while retry_count < MAX_RETRIES:
-            messages.extend([
-                {"role": "assistant", "content": accumulated_response},
-                {"role": "user", "content": CONTINUE_PROMPT}
-            ])
-            
+            messages.extend(
+                [
+                    {"role": "assistant", "content": accumulated_response},
+                    {"role": "user", "content": CONTINUE_PROMPT},
+                ]
+            )
+
             continuation = structured_model.invoke(messages)
             if not isinstance(continuation, dict):
                 raise ParseError("Expected dictionary response format")
-                
-            if continuation.get('parsed') is not None:
+
+            if continuation.get("parsed") is not None:
                 return {
-                    "main.py": self._reformat_code(continuation['parsed'].main_py, Code=True),
-                    "requirements.txt": self._reformat_code(continuation['parsed'].requirements_txt),
-                    "policy.json": self._reformat_code(continuation['parsed'].policy_json),
+                    "main.py": self._reformat_code(
+                        continuation["parsed"].main_py, Code=True
+                    ),
+                    "requirements.txt": self._reformat_code(
+                        continuation["parsed"].requirements_txt
+                    ),
+                    "policy.json": self._reformat_code(
+                        continuation["parsed"].policy_json
+                    ),
                 }
-            
-            raw_response = continuation.get('raw', '').content if isinstance(continuation.get('raw'), BaseMessage) else str(continuation.get('raw', ''))
+
+            raw_response = (
+                continuation.get("raw", "").content
+                if isinstance(continuation.get("raw"), BaseMessage)
+                else str(continuation.get("raw", ""))
+            )
             accumulated_response += f"\n{raw_response}"
-            
+
             # Check if this is still a token limit issue
-            if not any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
-                raise ParseError(f"Failed to parse response after continuation: {raw_response}")
-            
+            if not any(
+                marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS
+            ):
+                raise ParseError(
+                    f"Failed to parse response after continuation: {raw_response}"
+                )
+
             retry_count += 1
-            
+
         raise TokenLimitError(
             f"Failed to get complete response after {MAX_RETRIES} retries.\n"
             f"Accumulated response: {accumulated_response}"
         )
-    
-    def _extract_latest_generated_files(self, raw_response: Union[str, List[dict]]) -> Dict[str, str]:
+
+    def _extract_latest_generated_files(
+        self, raw_response: Union[str, List[dict]]
+    ) -> Dict[str, str]:
         """Extract latest GeneratedFiles content from Nova model response."""
         # Parse response if string
-        messages = json.loads(raw_response) if isinstance(raw_response, str) else raw_response
+        messages = (
+            json.loads(raw_response) if isinstance(raw_response, str) else raw_response
+        )
         # Track latest content
-        latest_files = {
-            'main_py': '',
-            'requirements_txt': '',
-            'policy_json': ''
-        }
+        latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
         # Scan all messages, overriding with latest content
         for msg in messages:
-            if msg.get('type') == 'tool_use' and msg.get('name') == 'GeneratedFiles':
-                input_data = msg.get('input', {})
+            if msg.get("type") == "tool_use" and msg.get("name") == "GeneratedFiles":
+                input_data = msg.get("input", {})
                 for key in latest_files:
                     if key in input_data and input_data[key]:
                         latest_files[key] = input_data[key]
@@ -140,23 +160,41 @@ class CodeGenerationWorkflow:
         start_time = datetime.now()
 
         try:
+            # Validate model can generate code
+            if not self.model_registry.validate_model_capability(
+                model_name, ModelCapability.CODE_GENERATION
+            ):
+                raise ValueError(f"Model '{model_name}' does not support code generation")
+
             with collect_runs() as runs_cb:
                 run_name = f"code_generation_{prompt_name}"
                 tags = ["code_generation", prompt_name, model_name]
 
-                messages = self.prompt_manager.format_prompt(prompt_name, variables)
+                # Get model config to check system prompt support
+                model_config = self.model_registry.models[model_name]
+                supports_system_prompt = model_config.supports_system_prompt
+
+                messages = self.prompt_manager.format_prompt(
+                    prompt_name,
+                    variables,
+                    supports_system_prompt=supports_system_prompt,
+                )
                 if not messages:
                     raise ValueError(f"Prompt '{prompt_name}' not found")
 
                 model = self.model_registry.get_model(model_name)
                 model = model.with_config({"run_name": run_name, "tags": tags})
 
-                structured_output_params = self.model_registry.get_structured_output_params(
-                    model_name, GeneratedFiles
+                structured_output_params = (
+                    self.model_registry.get_structured_output_params(
+                        model_name, GeneratedFiles
+                    )
                 )
                 if not structured_output_params.get("include_raw"):
-                    raise ValueError("include_raw must be True in model definition for token limit handling")
-                
+                    raise ValueError(
+                        "include_raw must be True in model definition for token limit handling"
+                    )
+
                 structured_model = model.with_structured_output(
                     GeneratedFiles, **structured_output_params
                 )
@@ -165,23 +203,39 @@ class CodeGenerationWorkflow:
                 if not isinstance(response, dict):
                     raise ParseError("Expected dictionary response format")
 
-                if response.get('parsed') is not None:
+                if response.get("parsed") is not None:
                     generated_files = {
-                        "main.py": self._reformat_code(response['parsed'].main_py, code=True),
-                        "requirements.txt": self._reformat_code(response['parsed'].requirements_txt),
-                        "policy.json": (response['parsed'].policy_json
-                                        if isinstance(response['parsed'].policy_json, dict)
-                                        else self._reformat_code(response['parsed'].policy_json)),
+                        "main.py": self._reformat_code(
+                            response["parsed"].main_py, code=True
+                        ),
+                        "requirements.txt": self._reformat_code(
+                            response["parsed"].requirements_txt
+                        ),
+                        "policy.json": (
+                            response["parsed"].policy_json
+                            if isinstance(response["parsed"].policy_json, dict)
+                            else self._reformat_code(response["parsed"].policy_json)
+                        ),
                     }
                 else:
-                    raw_response = response.get('raw', '').content if isinstance(response.get('raw'), BaseMessage) else str(response.get('raw', ''))
+                    raw_response = (
+                        response.get("raw", "").content
+                        if isinstance(response.get("raw"), BaseMessage)
+                        else str(response.get("raw", ""))
+                    )
                     latest_files = self._extract_latest_generated_files(raw_response)
                     generated_files = {
-                        "main.py": self._reformat_code(latest_files['main_py'], code=True),
-                        "requirements.txt": self._reformat_code(latest_files['requirements_txt']),
-                        "policy.json": (latest_files['policy_json'] 
-                                        if isinstance(latest_files['policy_json'], dict) 
-                                        else self._reformat_code(latest_files['policy_json'])),
+                        "main.py": self._reformat_code(
+                            latest_files["main_py"], code=True
+                        ),
+                        "requirements.txt": self._reformat_code(
+                            latest_files["requirements_txt"]
+                        ),
+                        "policy.json": (
+                            latest_files["policy_json"]
+                            if isinstance(latest_files["policy_json"], dict)
+                            else self._reformat_code(latest_files["policy_json"])
+                        ),
                     }
 
                 result = WorkflowResult(
@@ -208,10 +262,12 @@ class CodeGenerationWorkflow:
                 generated_files={},
             )
 
-    def _reformat_code(self, model_response: str, code: bool=False) -> str:
+    def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
-        decoded = bytes(model_response.encode('utf-8').decode('unicode-escape').encode('utf-8')).decode('utf-8')
-        
+        decoded = bytes(
+            model_response.encode("utf-8").decode("unicode-escape").encode("utf-8")
+        ).decode("utf-8")
+
         # Only process Python files
         if not code:
             return decoded
@@ -219,15 +275,15 @@ class CodeGenerationWorkflow:
         try:
             # Validate Python syntax
             ast.parse(decoded)
-            
+
             # Run pyflakes to detect issues
             error_output = StringIO()
             reporter = Reporter(StringIO(), error_output)
-            check(decoded, 'generated_code', reporter)
+            check(decoded, "generated_code", reporter)
 
             if error_output.getvalue():
                 print(f"Pyflakes detected issues:\n{error_output.getvalue()}")
-            
+
             # Fix imports automatically
             decoded = fix_code(
                 decoded,
@@ -235,21 +291,24 @@ class CodeGenerationWorkflow:
                 remove_unused_variables=True,
                 expand_star_imports=True,  # Expand * imports for better clarity
             )
-            
+
             # Apply autopep8 fixes for other issues
-            decoded = autopep8.fix_code(decoded, options={
-                'aggressive': 2,  # More aggressive fixes
-                'max_line_length': 100,
-            })
-            
+            decoded = autopep8.fix_code(
+                decoded,
+                options={
+                    "aggressive": 2,  # More aggressive fixes
+                    "max_line_length": 100,
+                },
+            )
+
             # Final formatting with black
             decoded = format_str(decoded, mode=FileMode())
-            
+
         except SyntaxError as e:
             print(f"Warning: Generated Python code has syntax errors: {e}")
         except Exception as e:
             print(f"Warning: Code formatting failed: {e}")
-        
+
         return decoded
 
     def _save_result(self, result: WorkflowResult) -> None:
@@ -267,11 +326,11 @@ class CodeGenerationWorkflow:
             for filename, content in result.generated_files.items():
                 try:
                     file_path = run_dir / filename
-                    if filename.endswith('.json') and isinstance(content, dict):
-                        with open(file_path, 'w') as f:
+                    if filename.endswith(".json") and isinstance(content, dict):
+                        with open(file_path, "w") as f:
                             json.dump(content, f, indent=2)
                     else:
-                        with open(file_path, 'w') as f:
+                        with open(file_path, "w") as f:
                             f.write(content)
                             f.flush()
                 except Exception as e:

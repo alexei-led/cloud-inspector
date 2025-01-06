@@ -1,15 +1,16 @@
 """Command-line interface for Cloud Inspector."""
 
-from datetime import datetime
-import logging
-from pathlib import Path
-from typing import Optional, List, Dict, Any
 import json
-from tabulate import tabulate
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
 
 import click
+from tabulate import tabulate
 
 from cloud_inspector.prompts import PromptManager
+from cloud_inspector.prompt_generator import PromptGenerator
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
@@ -63,12 +64,12 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
 
 
 @cli.group()
-def prompts():
+def prompt():
     """Manage prompt templates."""
     pass
 
 
-@prompts.command(name="list")
+@prompt.command(name="list")
 @click.option("--tag", help="Filter prompts by tag")
 @click.option("--service", help="Filter prompts by AWS service")
 @click.option(
@@ -138,7 +139,7 @@ def list_prompts(
             click.echo(formatted_line)
 
 
-@prompts.command()
+@prompt.command()
 @click.argument("name")
 @click.pass_context
 def show(ctx: click.Context, name: str):
@@ -163,7 +164,7 @@ def show(ctx: click.Context, name: str):
     click.echo(prompt.template)
 
 
-@prompts.command()
+@prompt.command()
 @click.argument("file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.pass_context
 def validate(ctx: click.Context, file: Path):
@@ -179,22 +180,73 @@ def validate(ctx: click.Context, file: Path):
             click.echo(f"  - {error}")
 
 
-# Workflow Commands
-
-
+# Models Commands
 @cli.group()
-def workflow():
-    """Manage code generation workflow."""
+def model():
+    """Manage model configurations."""
     pass
 
 
-@workflow.command()
+@model.command(name="list")
+@click.pass_context
+def list_models(ctx: click.Context):
+    """List available models."""
+    registry = ctx.obj["registry"]
+    models = registry.list_models()
+
+    if not models:
+        click.echo("No models configured.")
+        return
+
+    # Find the longest name for alignment
+    max_name_length = max(len(name) for name in models.keys())
+
+    click.echo("\nAvailable Models:")
+    click.echo("=" * (max_name_length + 40))
+
+    # Print each model with aligned columns
+    for name, config in models.items():
+        click.echo(f"{name:<{max_name_length}}    {config['model_id']}")
+
+
+@prompt.command(name="generate")
+@click.argument("service")
+@click.argument("request")
+@click.option("--model", default="gpt-4-turbo", help="Name of the LLM model to use.")
+@click.pass_context
+def generate_prompt(ctx: click.Context, service: str, request: str, model: str):
+    """Generate a new prompt template from a request."""
+    generator = PromptGenerator(ctx.obj["registry"])
+    result = generator.generate_prompt(model, service, request)
+
+    # Display the generated prompt
+    click.echo("\nGenerated Prompt:")
+    click.echo("=" * 80)
+    click.echo(f"Service: {result.service}")
+    click.echo(f"Operation: {result.operation}")
+    click.echo(f"Description: {result.description}")
+    click.echo("\nTemplate:")
+    click.echo("-" * 40)
+    click.echo(result.template)
+    click.echo("\nVariables:", ", ".join(result.variables))
+    click.echo("Tags:", ", ".join(result.tags))
+
+
+@cli.group()
+def code():
+    """Generate and manage code generation results."""
+    pass
+
+
+@code.command(name="generate")
 @click.argument("prompt_name")
 @click.option("--model", default="gpt-4o-mini", help="Name of the LLM model to use.")
 @click.option("--var", "-v", multiple=True, help="Variables in key=value format.")
 @click.pass_context
-def generate(ctx: click.Context, prompt_name: str, model: str, var: tuple[str, ...]):
-    """Generate code using a prompt."""
+def generate_code(
+    ctx: click.Context, prompt_name: str, model: str, var: tuple[str, ...]
+):
+    """Generate code using a specified prompt and model."""
     # Parse variables
     variables = {}
     for v in var:
@@ -223,13 +275,7 @@ def generate(ctx: click.Context, prompt_name: str, model: str, var: tuple[str, .
 
     if result.success:
         click.echo("\nCode Generation Successful!")
-        click.echo("=" * 80)
-
-        # Display each generated file
-        for filename, content in result.generated_files.items():
-            click.echo(f"\n{filename}:")
-            click.echo("-" * 80)
-            click.echo(content)
+        click.echo("=" * 120)
 
         # Show where files were saved
         output_dir = (
@@ -239,24 +285,24 @@ def generate(ctx: click.Context, prompt_name: str, model: str, var: tuple[str, .
         click.echo(f"\nFiles saved to: {output_dir}")
     else:
         click.echo("\nCode Generation Failed!")
-        click.echo("=" * 80)
+        click.echo("=" * 120)
         click.echo(f"Error: {result.error}")
 
 
-@workflow.command()
+@code.command(name="list")
 @click.option("--prompt", help="Filter by prompt name")
 @click.option("--model", help="Filter by model name")
 @click.option("--start", type=click.DateTime(), help="Filter from this start time")
 @click.option("--end", type=click.DateTime(), help="Filter until this end time")
 @click.pass_context
-def list_results(
+def list_code_results(
     ctx: click.Context,
     prompt: Optional[str],
     model: Optional[str],
     start: Optional[datetime],
     end: Optional[datetime],
 ):
-    """List workflow execution results."""
+    """List previous code generation results."""
     results = ctx.obj["workflow_manager"].list_results(prompt, model, start, end)
 
     if not results:
@@ -276,10 +322,10 @@ def list_results(
         click.echo("-" * 40)
 
 
-@workflow.command()
+@code.command(name="stats")
 @click.pass_context
-def stats(ctx: click.Context):
-    """Show workflow execution statistics."""
+def code_stats(ctx: click.Context):
+    """Show statistics about code generation executions."""
     workflow_manager = ctx.obj["workflow_manager"]
     wf_stats = workflow_manager.get_statistics()
 
@@ -315,35 +361,6 @@ def stats(ctx: click.Context):
         click.echo("-" * 40)
         for error, count in wf_stats["common_errors"].items():
             click.echo(f"{error}: {count} occurrences")
-
-
-# Models Commands
-@cli.group()
-def models():
-    """Manage model configurations."""
-    pass
-
-
-@models.command(name="list")
-@click.pass_context
-def list_models(ctx: click.Context):
-    """List available models."""
-    registry = ctx.obj["registry"]
-    models = registry.list_models()
-
-    if not models:
-        click.echo("No models configured.")
-        return
-
-    # Find the longest name for alignment
-    max_name_length = max(len(name) for name in models.keys())
-
-    click.echo("\nAvailable Models:")
-    click.echo("=" * (max_name_length + 40))
-
-    # Print each model with aligned columns
-    for name, config in models.items():
-        click.echo(f"{name:<{max_name_length}}    {config['model_id']}")
 
 
 if __name__ == "__main__":

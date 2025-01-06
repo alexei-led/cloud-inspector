@@ -3,6 +3,9 @@ models:
   gpt-4o:
     provider: openai
     model_id: gpt-4o
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 16383
     temperature: 0.1
     top_p: 0.9
@@ -32,6 +35,9 @@ models:
   gpt-4o-mini:
     provider: openai
     model_id: gpt-4o-mini
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 16383
     temperature: 0.1
     top_p: 0.9
@@ -58,68 +64,29 @@ models:
           - policy_json
         additionalProperties: false
 
-  o1:
+  o1-preview:
     provider: openai
-    model_id: o1
+    model_id: o1-preview
+    capabilities:
+      - prompt_generation
     max_tokens: 100000
-    temperature: 0.1
-    top_p: 0.9
-    frequency_penalty: 0.1
-    presence_penalty: 0.1
-    response_format:
-      name: generated_files
-      strict: true
-      schema:
-        type: object
-        properties:
-          main_py:
-            type: string
-            description: The content of the main Python file.
-          requirements_txt:
-            type: string
-            description: The dependencies listed in the requirements.txt file.
-          policy_json:
-            type: string
-            description: The content of the AWS IAM policy JSON file.
-        required:
-          - main_py
-          - requirements_txt
-          - policy_json
-        additionalProperties: false
+    supports_system_prompt: false
 
   o1-mini:
     provider: openai
     model_id: o1-mini
+    capabilities:
+      - prompt_generation
     max_tokens: 65536
-    temperature: 0.1
-    top_p: 0.9
-    frequency_penalty: 0.1
-    presence_penalty: 0.1
-    response_format:
-      name: generated_files
-      strict: true
-      schema:
-        type: object
-        properties:
-          main_py:
-            type: string
-            description: The content of the main Python file.
-          requirements_txt:
-            type: string
-            description: The dependencies listed in the requirements.txt file.
-          policy_json:
-            type: string
-            description: The content of the AWS IAM policy JSON file.
-        required:
-          - main_py
-          - requirements_txt
-          - policy_json
-        additionalProperties: false
+    supports_system_prompt: false
 
   # Anthropic Models (Latest Claude 3.5)
   claude-3-5-sonnet:
     provider: anthropic
     model_id: claude-3-5-sonnet-latest
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 8192
     temperature: 0.1
     top_p: 0.9
@@ -128,6 +95,9 @@ models:
   claude-3-5-haiku:
     provider: anthropic
     model_id: claude-3-5-haiku-latest
+    capabilities:
+      - code_generation
+      - prompt_generation 
     max_tokens: 8192
     temperature: 0.1
     top_p: 0.9
@@ -137,16 +107,21 @@ models:
   llama3-2:
     provider: ollama
     model_id: llama3.2:latest
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 4096
     temperature: 0.1
     top_p: 0.9
     repeat_penalty: 1.1
     stop: ["</code>", "```"]
 
-
   qwen2-5-coder:
     provider: ollama
     model_id: qwen2.5-coder:latest
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 4096
     temperature: 0.1
     top_p: 0.9
@@ -156,16 +131,20 @@ models:
   qwq:
     provider: ollama
     model_id: qwq:latest
+    capabilities:
+      - prompt_generation
     max_tokens: 4096
     temperature: 0.1
     top_p: 0.9
     repeat_penalty: 1.1
-    stop: ["</code>", "```"]
 
   # Google Models
   gemini-flash-2-0:
     provider: google
     model_id: gemini-2.0-flash-exp
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 8192
     temperature: 0.1
     top_p: 0.9
@@ -189,6 +168,9 @@ models:
   claude-3-5-sonnet-bedrock:
     provider: bedrock
     model_id: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 4096
     temperature: 0.1
     top_p: 0.9
@@ -197,6 +179,9 @@ models:
   nova-micro:
     provider: bedrock
     model_id: us.amazon.nova-micro-v1:0
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 5120
     temperature: 0.1
     top_p: 0.9
@@ -205,10 +190,14 @@ models:
   nova-pro:
     provider: bedrock
     model_id: us.amazon.nova-pro-v1:0
+    capabilities:
+      - code_generation
+      - prompt_generation
     max_tokens: 5120
     temperature: 0.1
     top_p: 0.9
     top_k: 30
+
 
 provider_configs:
   openai:
@@ -228,4 +217,4 @@ provider_configs:
   bedrock:
     region_env: AWS_DEFAULT_REGION
     profile_env: AWS_PROFILE
-    default_region: us-west-2 
+    default_region: us-west-2

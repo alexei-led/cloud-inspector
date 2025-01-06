@@ -211,3 +211,61 @@ prompts:
       - troubleshooting
       - connectivity
       - misconfigurations
+
+  troubleshoot_ec2_connection_2:
+    service: ec2
+    operation: troubleshoot_connection
+    description: "Troubleshoot connection issues to an EC2 instance"
+    template: |
+      Generate Python code using boto3 to troubleshoot connection issues to EC2 instance `{instance_id}` in region `{region}`. The script should:
+
+      1. **Fetch Instance Details**:
+        - Instance state (e.g., running, stopped).
+        - Public and private IP addresses.
+        - Associated security groups.
+
+      2. **Analyze Security Group Inbound Rules**:
+        - List inbound rules for the security groups associated with the instance.
+        - Check if the necessary ports are open (e.g., port 22 for SSH or port 3389 for RDP).
+        - Identify if the inbound rules allow traffic from your IP address or required CIDR ranges.
+
+      3. **Check Network ACLs (NACLs)**:
+        - Retrieve the NACLs associated with the instance's subnet.
+        - Verify inbound and outbound rules do not block required traffic.
+
+      4. **Verify VPC Route Tables**:
+        - Ensure the subnet's route table has a route to an Internet Gateway for internet access.
+        - Check for any conflicting routes that might prevent connectivity.
+
+      5. **Check Instance Status Checks**:
+        - Retrieve the results of both system and instance status checks.
+        - Identify any failed checks that might impact connectivity.
+
+      6. **Review Elastic IP Association** (if applicable):
+        - Confirm if an Elastic IP is associated with the instance.
+        - Verify that the Elastic IP is correctly configured.
+
+      7. **Optionally, Fetch VPC Flow Logs** (if enabled):
+        - Retrieve recent VPC Flow Logs for the instance's network interface.
+        - Analyze logs for denied traffic or unusual patterns.
+
+      8. **Provide a Summary Report**:
+        - Summarize any potential misconfigurations or issues found.
+        - Suggest next steps or recommendations to resolve connectivity issues.
+
+      **Requirements**:
+
+      - Use proper error handling.
+      - Include necessary imports.
+      - Follow AWS best practices.
+      - Add type hints.
+      - Add docstrings.
+
+    variables:
+      - instance_id
+      - region
+
+    tags:
+      - ec2
+      - troubleshooting
+      - connection

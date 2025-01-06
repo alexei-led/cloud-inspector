@@ -1,7 +1,7 @@
 """Prompt management system for Cloud Inspector."""
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Optional, Dict, Any, List, Set
 
 import yaml
 from langchain_core.prompts import ChatPromptTemplate
@@ -87,25 +87,44 @@ GUIDELINES
      print(json.dumps(results, indent=4, cls=DateTimeEncoder))
      ```
 
-GOAL: The generated code must be correct, complete, and robust, designed to run automatically without human review or intervention. The **output produced by the script** must be in a **structured, LLM-friendly JSON format** that is easy to parse, interpret, and use for service troubleshooting.
+GOAL: The generated code must be correct, complete, and robust, designed to run automatically without human review or intervention.
+The **output produced by the script** must be in a **structured, LLM-friendly JSON format** that is easy to parse, interpret, and use for service troubleshooting.
 """
+
 
 class PromptTemplate(BaseModel):
     """Single prompt template definition."""
 
     service: str = Field(..., description="AWS service (e.g., ec2, s3)")
     operation: str = Field(..., description="Operation type (e.g., list, analyze)")
-    description: str = Field(..., description="Brief description of what the prompt does")
+    description: str = Field(
+        ..., description="Brief description of what the prompt does"
+    )
     template: str = Field(..., description="The actual prompt template")
-    variables: List[str] = Field(default_factory=list, description="Variables required in the template")
+    variables: List[str] = Field(
+        default_factory=list, description="Variables required in the template"
+    )
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
 
-    def format_messages(self, variables: Dict[str, Any]) -> List[Any]:
+    def format_messages(
+        self, variables: Dict[str, Any], supports_system_prompt: bool = True
+    ) -> List[Any]:
         """Format the prompt into chat messages."""
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SYSTEM_MESSAGE),
-            ("user", self.template),
-        ])
+        if supports_system_prompt:
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", SYSTEM_MESSAGE),
+                    ("user", self.template),
+                ]
+            )
+        else:
+            # For models that don't support system prompts, combine them
+            combined_prompt = f"<instructions>{SYSTEM_MESSAGE}</instructions>\n\n<question>{self.template}</question>"
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("user", combined_prompt),
+                ]
+            )
         return prompt.format_messages(**variables)
 
 
@@ -180,7 +199,7 @@ class PromptManager:
         return {tag for prompt in self.prompts.values() for tag in prompt.tags}
 
     def format_prompt(
-        self, name: str, variables: Dict[str, Any]
+        self, name: str, variables: Dict[str, Any], supports_system_prompt: bool = True
     ) -> Optional[List[Any]]:
         """Format a prompt template with provided variables."""
         prompt = self.get_prompt(name)
@@ -193,7 +212,9 @@ class PromptManager:
             raise ValueError(f"Missing required variables: {missing_vars}")
 
         try:
-            return prompt.format_messages(variables)
+            return prompt.format_messages(
+                variables, supports_system_prompt=supports_system_prompt
+            )
         except KeyError as e:
             raise ValueError(f"Invalid variable in template: {e}")
         except Exception as e:
