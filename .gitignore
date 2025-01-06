@@ -46,6 +46,8 @@ htmlcov/
 # Project specific
 generated_code/*
 !generated_code/.gitkeep
+generated_prompts/*
+!generated_prompts/.gitkeep
 
 # Logs
 *.log

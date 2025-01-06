@@ -101,8 +101,8 @@ class PromptTemplate(BaseModel):
         ..., description="Brief description of what the prompt does"
     )
     template: str = Field(..., description="The actual prompt template")
-    variables: List[str] = Field(
-        default_factory=list, description="Variables required in the template"
+    variables: List[Dict[str, str]] = Field(
+        default_factory=list, description="List of variables with name and description"
     )
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
 
@@ -110,6 +110,22 @@ class PromptTemplate(BaseModel):
         self, variables: Dict[str, Any], supports_system_prompt: bool = True
     ) -> List[Any]:
         """Format the prompt into chat messages."""
+        # Validate that all required variables are provided
+        required_var_names = {var["name"] for var in self.variables}
+        provided_var_names = set(variables.keys())
+        missing_vars = required_var_names - provided_var_names
+
+        if missing_vars:
+            var_descriptions = {
+                var["name"]: var["description"]
+                for var in self.variables
+                if var["name"] in missing_vars
+            }
+            raise ValueError(
+                f"Missing required variables: "
+                f"{', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}"
+            )
+
         if supports_system_prompt:
             prompt = ChatPromptTemplate.from_messages(
                 [
@@ -118,7 +134,6 @@ class PromptTemplate(BaseModel):
                 ]
             )
         else:
-            # For models that don't support system prompts, combine them
             combined_prompt = f"<instructions>{SYSTEM_MESSAGE}</instructions>\n\n<question>{self.template}</question>"
             prompt = ChatPromptTemplate.from_messages(
                 [

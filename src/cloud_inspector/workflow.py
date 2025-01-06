@@ -155,7 +155,7 @@ class CodeGenerationWorkflow:
 
     def execute(
         self, prompt_name: str, model_name: str, variables: Dict[str, Any]
-    ) -> WorkflowResult:
+    ) -> tuple[WorkflowResult, Path]:
         """Execute the code generation workflow."""
         start_time = datetime.now()
 
@@ -164,7 +164,9 @@ class CodeGenerationWorkflow:
             if not self.model_registry.validate_model_capability(
                 model_name, ModelCapability.CODE_GENERATION
             ):
-                raise ValueError(f"Model '{model_name}' does not support code generation")
+                raise ValueError(
+                    f"Model '{model_name}' does not support code generation"
+                )
 
             with collect_runs() as runs_cb:
                 run_name = f"code_generation_{prompt_name}"
@@ -248,11 +250,11 @@ class CodeGenerationWorkflow:
                     generated_files=generated_files,
                 )
 
-                self._save_result(result)
-                return result
+                output_dir = self._save_result(result)
+                return result, output_dir
 
         except Exception as e:
-            return WorkflowResult(
+            result = WorkflowResult(
                 prompt_name=prompt_name,
                 model_name=model_name,
                 timestamp=start_time,
@@ -261,6 +263,8 @@ class CodeGenerationWorkflow:
                 error=str(e),
                 generated_files={},
             )
+            output_dir = self._save_result(result)
+            return result, output_dir
 
     def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
@@ -311,7 +315,7 @@ class CodeGenerationWorkflow:
 
         return decoded
 
-    def _save_result(self, result: WorkflowResult) -> None:
+    def _save_result(self, result: WorkflowResult) -> Path:
         """Save workflow result to file."""
         # Create timestamp-based filename
         timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
@@ -352,6 +356,8 @@ class CodeGenerationWorkflow:
                 f,
                 indent=2,
             )
+
+        return run_dir
 
 
 class WorkflowManager:

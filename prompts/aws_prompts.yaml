@@ -15,7 +15,7 @@ prompts:
       - Launch time
       - Tags
       - Public/Private IPs
-      
+
       Requirements:
       1. Use proper error handling
       2. Include necessary imports
@@ -23,7 +23,8 @@ prompts:
       4. Add type hints
       5. Add docstrings
     variables:
-      - region
+      - name: region
+        description: "AWS region to list instances from (e.g., us-east-1)"
     tags:
       - ec2
       - list
@@ -40,10 +41,10 @@ prompts:
       - Memory Usage
       - Disk I/O
       - Network Traffic
-      
+
       Instance ID: {instance_id}
       Time Period: {period} seconds
-      
+
       Requirements:
       1. Use proper error handling
       2. Include necessary imports
@@ -51,8 +52,10 @@ prompts:
       4. Add type hints
       5. Add docstrings
     variables:
-      - instance_id
-      - period
+      - name: instance_id
+        description: "ID of the EC2 instance to monitor"
+      - name: period
+        description: "Time period in seconds for metrics collection"
     tags:
       - ec2
       - metrics
@@ -70,7 +73,7 @@ prompts:
       - Number of objects
       - Size distribution by prefix
       - Last modified statistics
-      
+
       Requirements:
       1. Use proper error handling
       2. Include necessary imports
@@ -78,7 +81,8 @@ prompts:
       4. Add type hints
       5. Add docstrings
     variables:
-      - bucket_name
+      - name: bucket_name
+        description: "Name of the S3 bucket to analyze"
     tags:
       - s3
       - analysis
@@ -96,7 +100,7 @@ prompts:
       - Period: {period} seconds
       - Include both average and maximum values
       - Add appropriate annotations
-      
+
       Requirements:
       1. Use proper error handling
       2. Include necessary imports
@@ -104,8 +108,10 @@ prompts:
       4. Add type hints
       5. Add docstrings
     variables:
-      - metric_name
-      - period
+      - name: metric_name
+        description: "Name of the CloudWatch metric to display"
+      - name: period
+        description: "Time period in seconds for metric aggregation"
     tags:
       - cloudwatch
       - dashboard
@@ -142,13 +148,13 @@ prompts:
       - Add type hints and docstrings.
       - Ensure the script outputs clear and actionable findings or next steps.
     variables:
-      - bucket_name
+      - name: bucket_name
+        description: "Name of the S3 bucket with trigger issues"
     tags:
       - s3
       - troubleshooting
       - triggers
 
-  # EC2 Prompts
   troubleshoot_ec2_connection:
     service: ec2
     operation: troubleshoot
@@ -204,8 +210,10 @@ prompts:
       4. Add type hints.
       5. Add docstrings.
     variables:
-      - instance_id
-      - region
+      - name: instance_id
+        description: "ID of the EC2 instance having connectivity issues"
+      - name: region
+        description: "AWS region where the instance is located"
     tags:
       - ec2
       - troubleshooting
@@ -262,9 +270,10 @@ prompts:
       - Add docstrings.
 
     variables:
-      - instance_id
-      - region
-
+      - name: instance_id
+        description: "ID of the EC2 instance to troubleshoot"
+      - name: region
+        description: "AWS region where the instance is located"
     tags:
       - ec2
       - troubleshooting

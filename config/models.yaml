@@ -69,7 +69,7 @@ models:
     model_id: o1-preview
     capabilities:
       - prompt_generation
-    max_tokens: 100000
+    max_tokens: 32768
     supports_system_prompt: false
 
   o1-mini:

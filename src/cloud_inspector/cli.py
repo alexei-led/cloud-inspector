@@ -157,8 +157,13 @@ def show(ctx: click.Context, name: str):
     click.echo(f"Service: {prompt.service}")
     click.echo(f"Operation: {prompt.operation}")
     click.echo(f"Description: {prompt.description}")
-    click.echo(f"Variables: {', '.join(prompt.variables)}")
-    click.echo(f"Tags: {', '.join(prompt.tags)}")
+
+    if prompt.variables:
+        click.echo("\nVariables:")
+        for var in prompt.variables:
+            click.echo(f"  - {var['name']}: {var['description']}")
+
+    click.echo(f"\nTags: {', '.join(prompt.tags)}")
     click.echo("\nTemplate:")
     click.echo("-" * 40)
     click.echo(prompt.template)
@@ -210,26 +215,24 @@ def list_models(ctx: click.Context):
 
 
 @prompt.command(name="generate")
-@click.argument("service")
-@click.argument("request")
-@click.option("--model", default="gpt-4-turbo", help="Name of the LLM model to use.")
+@click.option("--cloud", required=True, help="Cloud provider (e.g., aws, gcp, azure)")
+@click.option("--service", required=True, help="Service name within the cloud provider")
+@click.option("--request", required=True, help="Description of the prompt to generate")
+@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
 @click.pass_context
-def generate_prompt(ctx: click.Context, service: str, request: str, model: str):
+def generate_prompt(
+    ctx: click.Context, cloud: str, service: str, request: str, model: str
+):
     """Generate a new prompt template from a request."""
     generator = PromptGenerator(ctx.obj["registry"])
-    result = generator.generate_prompt(model, service, request)
+    result, saved_path = generator.generate_prompt(model, service, request, cloud=cloud)
 
     # Display the generated prompt
     click.echo("\nGenerated Prompt:")
-    click.echo("=" * 80)
+    click.echo("=" * 120)
     click.echo(f"Service: {result.service}")
     click.echo(f"Operation: {result.operation}")
-    click.echo(f"Description: {result.description}")
-    click.echo("\nTemplate:")
-    click.echo("-" * 40)
-    click.echo(result.template)
-    click.echo("\nVariables:", ", ".join(result.variables))
-    click.echo("Tags:", ", ".join(result.tags))
+    click.echo(f"\nPrompt saved to: {saved_path}")
 
 
 @cli.group()
@@ -247,6 +250,13 @@ def generate_code(
     ctx: click.Context, prompt_name: str, model: str, var: tuple[str, ...]
 ):
     """Generate code using a specified prompt and model."""
+    prompt_manager = ctx.obj["prompt_manager"]
+    prompt = prompt_manager.get_prompt(prompt_name)
+
+    if not prompt:
+        click.echo(f"Error: Prompt '{prompt_name}' not found.")
+        return
+
     # Parse variables
     variables = {}
     for v in var:
@@ -257,6 +267,14 @@ def generate_code(
             click.echo(f"Invalid variable format: {v}")
             click.echo("Use format: key=value")
             return
+
+    # Show required variables if none provided
+    if not var and prompt.variables:
+        click.echo("\nRequired variables for this prompt:")
+        for var_info in prompt.variables:
+            click.echo(f"  - {var_info['name']}: {var_info['description']}")
+        click.echo("\nUse --var/-v option to provide values (e.g., -v name=value)")
+        return
 
     def get_workflow(ctx) -> CodeGenerationWorkflow:
         """Get CodeGenerationWorkflow instance from Click context."""
@@ -271,22 +289,19 @@ def generate_code(
 
     # Execute workflow
     flow = get_workflow(ctx)
-    result = flow.execute(prompt_name, model, variables)
+    try:
+        result, output_dir = flow.execute(prompt_name, model, variables)
 
-    if result.success:
-        click.echo("\nCode Generation Successful!")
-        click.echo("=" * 120)
-
-        # Show where files were saved
-        output_dir = (
-            flow.output_dir
-            / f"{prompt_name}_{model}_{result.timestamp.strftime('%Y%m%d_%H%M%S')}"
-        )
-        click.echo(f"\nFiles saved to: {output_dir}")
-    else:
-        click.echo("\nCode Generation Failed!")
-        click.echo("=" * 120)
-        click.echo(f"Error: {result.error}")
+        if result.success:
+            click.echo("\nCode Generation Successful!")
+            click.echo("=" * 120)
+            click.echo(f"\nFiles saved to: {output_dir}")
+        else:
+            click.echo("\nCode Generation Failed!")
+            click.echo("=" * 120)
+            click.echo(f"Error: {result.error}")
+    except ValueError as e:
+        click.echo(f"\nError: {str(e)}")
 
 
 @code.command(name="list")
