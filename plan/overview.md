@@ -1,212 +1,140 @@
 # Cloud Inspector Implementation Plan
 
-## Phase 1: Project Setup and Core Infrastructure ✅
+## Phase 3: Advanced Features
 
-### 1.1 Environment Setup ✅
+### 3.1 LangGraph Integration
 
-- [x] Initialize project with dependencies
-- [x] Set up pre-commit hooks for code quality
-- [x] Configure environment variables for API keys
-- [x] Set up LangSmith integration for tracing
-- [x] Create basic project structure
-- [x] Use .envrc file to keep secret environment variables
-- [x] Create .gitignore for this project following best practices
-- [x] Configure development tools (flake8, black, etc.)
+- [ ] Implement feedback loops
+  - [ ] Create code generation DAG
+  - [ ] Add execution feedback chain
+  - [ ] Implement error correction loop
+  - [ ] Add result analysis nodes
+- [ ] Add reasoning chains
+  - [x] Basic prompt generation workflow
+  - [ ] Advanced prompt discovery and management
+  - [ ] Multi-model orchestration chain
+  - [ ] Output validation chain
 
-### 1.2 LangChain Integration ✅
+### 3.2 Model Integration ✅
 
-#### 1.2.1 Prompt Templates ✅
-
-- [x] Define base template interface
-  - [x] Cloud-agnostic template system
-  - [x] Variable injection points
-  - [x] Model-specific adjustments
-- [x] Implement template validation
-  - [x] Basic syntax validation
-  - [x] Variable validation
-  - [x] Required sections check
-- [x] Add YAML-based prompt storage
-  - [x] Service-based organization
-  - [x] Tag support
-  - [x] Variable definitions
-
-#### 1.2.2 Output Parsers ✅
-
-- [x] Create base code parser
-  - [x] Python syntax validation
-  - [x] Import statement extraction
-  - [x] boto3 service detection
-- [x] Implement structured output parsing
-  - [x] Multi-file output support
-  - [x] Policy document parsing
-  - [x] Requirements parsing
-- [x] Add metadata extraction
-  - [x] Resource usage tracking
-  - [x] Dependencies identification
-  - [x] Security risk assessment
-
-#### 1.2.3 Model Registry ✅
-
-- [x] Design model interface
-  - [x] YAML-based configuration
+- [x] Add new model support
+  - [x] Model configuration system
   - [x] Provider-specific parameters
-  - [x] Environment variable management
-- [x] Implement model management
-  - [x] Model loading from config
-  - [x] Provider-specific initialization
-  - [x] Parameter validation
-- [x] Add model listing and selection
-  - [x] Available models display
-  - [x] Model capabilities tracking
-  - [x] Default model configuration
-
-#### 1.2.4 Monitoring System ✅
-
-- [x] Integrate with LangSmith
-  - [x] Prompt execution tracking
-  - [x] Token usage monitoring
-  - [x] Cost tracking
-  - [x] Performance profiling
-  - [x] Error logging
-
-### 1.3 Application Entry Point ✅
-
-- [x] Create CLI interface using Click
-  - [x] Implement command groups
-  - [x] Add global options
-  - [x] Configure logging
-- [x] Implement core commands
-  - [x] Prompt management
-  - [x] Code generation
-  - [x] Model management
-- [x] Add result management
-  - [x] Output directory organization
-  - [x] Result filtering and listing
-  - [x] Statistics generation
-
-## Phase 2: Code Generation System ✅
-
-### 2.1 Prompt Management ✅
-
-- [x] Create prompt file system
-  - [x] YAML format for prompts
-  - [x] Multi-prompt file support
-  - [x] Variable validation
-- [x] Add prompt categories
-  - [x] AWS service-based organization
-  - [x] Operation type categorization
-  - [x] Tag-based filtering
-- [x] Implement prompt utilities
-  - [x] List available prompts
-  - [x] Show prompt details
-  - [x] Validate prompt files
-
-### 2.2 Workflow System ✅
-
-- [x] Design code generation workflow
-  - [x] Prompt preparation
-  - [x] Model invocation
-  - [x] Result processing
-- [x] Add result management
-  - [x] File organization
-  - [x] Metadata tracking
-  - [x] Error handling
-- [x] Implement tracing
-  - [x] LangSmith integration
+  - [x] Model capability tracking
+  - [x] Structured output handling
+- [x] Basic model management
+  - [x] Model registry
+  - [x] Basic cost tracking
   - [x] Performance monitoring
-  - [x] Error tracking
+  - [x] Quality validation
 
-### 2.3 Output Processing ✅
+### 3.3 Prompt Management ✅
 
-- [x] Implement file generation
-  - [x] Python code formatting
-  - [x] Requirements file creation
-  - [x] Policy document formatting
-- [x] Add validation
-  - [x] Syntax checking
-  - [x] Import validation
-  - [x] Basic security checks
-- [x] Create metadata handling
-  - [x] Generation info tracking
-  - [x] Resource usage recording
-  - [x] Performance metrics
+- [x] Basic prompt system
+  - [x] YAML-based storage
+  - [x] Variable injection
+  - [x] Template validation
+  - [x] Service organization
+- [ ] Advanced prompt features
+  - [x] Generate prompts from problems
+  - [ ] Discover generated prompts
+  - [ ] Prompt version control
+  - [ ] Prompt effectiveness tracking
 
-## Phase 3: Future Enhancements
+### 3.4 Code Generation Workflow ✅
 
-### 3.1 Model Integration
+- [x] Basic workflow
+  - [x] Model selection
+  - [x] Prompt execution
+  - [x] Output formatting
+  - [x] Error handling
+- [x] Advanced features
+  - [x] Token limit handling
+  - [x] Continuation support
+  - [x] Code formatting
+  - [x] Basic validation
 
-- [ ] Add support for more models
-  - [ ] Anthropic Claude-3
-  - [ ] Google Gemini Pro
-  - [ ] AWS Bedrock models
-  - [ ] Local models via Ollama
-- [ ] Implement model comparison
-  - [ ] Performance metrics
+### 3.5 LangGraph Orchestration
+
+- [ ] Problem-to-code pipeline
+  - [ ] Prompt generation model selection
+  - [ ] Code generation model selection
+  - [ ] Inter-model communication
+  - [ ] Result aggregation
+- [ ] Workflow management
+  - [ ] Step tracking
+  - [ ] Error recovery
+  - [ ] Performance optimization
+  - [ ] Cost management
+
+### 3.6 Execution Management
+
+- [ ] Add execution tracking
+  - [ ] Create execution history
+  - [ ] Add resource usage monitoring
+  - [ ] Implement timeout handling
+  - [ ] Add parallel execution support
+- [ ] Implement result analysis
+  - [ ] Add output validation
+  - [ ] Create performance metrics
+  - [ ] Implement error cataloging
+  - [ ] Add success rate tracking
+
+### 3.7 LLM Comparison Framework
+
+- [ ] Implement model tracking
+  - [ ] Add performance metrics collection
+  - [ ] Create cost tracking system
+  - [ ] Implement quality scoring
+  - [ ] Add execution success tracking
+- [ ] Create analysis system
+  - [ ] Add comparative reporting
+  - [ ] Implement cost analysis
+  - [ ] Create quality benchmarks
+  - [ ] Track error patterns
+
+### 3.8 Problem-Solving Workflow
+
+- [ ] Problem analysis system
+  - [ ] Add problem classification
+  - [ ] Create prompt generation rules
+  - [ ] Implement context extraction
+  - [ ] Add solution suggestion
+- [ ] Result processing
+  - [ ] Create data formatting
+  - [ ] Add context organization
+  - [ ] Implement relevance scoring
+  - [ ] Create agent-ready output
+
+### 3.9 Model Evaluation
+
+- [ ] Add evaluation metrics
+  - [ ] Code quality scoring
+  - [ ] Execution success rate
+  - [ ] Problem-solving effectiveness
+  - [ ] Cost efficiency tracking
+- [ ] Create benchmarking system
+  - [ ] Standard test scenarios
+  - [ ] Performance comparisons
   - [ ] Cost analysis
   - [ ] Quality assessment
-- [ ] Add model-specific optimizations
-  - [ ] Prompt tuning
-  - [ ] Parameter optimization
-  - [ ] Response formatting
-
-### 3.2 Advanced Analysis
-
-- [ ] Enhance code analysis
-  - [ ] Deep security scanning
-  - [ ] Best practices validation
-  - [ ] Cost optimization checks
-- [ ] Add testing capabilities
-  - [ ] Unit test generation
-  - [ ] Integration test templates
-  - [ ] Mock data generation
-- [ ] Implement advanced validation
-  - [ ] IAM policy analysis
-  - [ ] Resource configuration checks
-  - [ ] Compliance validation
-
-### 3.3 User Experience
-
-- [ ] Add interactive mode
-  - [ ] Step-by-step code generation
-  - [ ] Real-time validation
-  - [ ] Suggestion system
-- [ ] Improve output formatting
-  - [ ] Customizable templates
-  - [ ] Rich terminal output
-  - [ ] Report generation
-- [ ] Enhance error handling
-  - [ ] Detailed error messages
-  - [ ] Recovery suggestions
-  - [ ] Automatic fixes
-
-## Technical Considerations
-
-### LangChain Integration ✅
-
-- [x] Use LangChain for model interaction
-- [x] Leverage LangSmith for monitoring
-- [x] Implement structured output
-- [x] Add tracing and debugging
-
-### Security ✅
-
-- [x] Secure API key management
-- [x] Basic code validation
-- [x] AWS resource validation
-- [ ] Advanced security scanning
-
-### Performance ✅
-
-- [x] Response time tracking
-- [x] Cost monitoring
-- [x] Resource usage tracking
-- [ ] Optimization recommendations
 
 ## Success Metrics
 
-- [x] Code generation success rate
-- [x] Basic code quality validation
+- [x] Basic code generation success rate
+- [x] Code quality validation
 - [x] Execution time tracking
 - [x] Cost monitoring
+- [x] Model comparison metrics
 - [ ] Advanced quality metrics
-- [ ] User satisfaction tracking
+- [ ] Cross-cloud compatibility
+- [ ] User satisfaction metrics
+- [ ] Security compliance score
+- [ ] Code execution success rate
+- [ ] Error correction effectiveness
+- [x] Basic prompt generation quality
+- [ ] Advanced prompt management metrics
+- [ ] Multi-model workflow metrics
+- [ ] Problem-solving success rate
+- [ ] Cost per successful execution
+- [ ] Solution relevance score

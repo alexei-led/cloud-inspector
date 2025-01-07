@@ -1,56 +1,131 @@
 # Project: LLM Code Generation Comparison for Cloud Inspection (AWS focus initially)
 
-**Objective:** Develop a Python project to compare the code generation capabilities of various LLMs (OpenAI, Gemini, Titan, Claude, Llama, and potentially others) specifically for generating Python scripts that interact with AWS services using boto3. The project should facilitate prompt engineering, code generation, automated code review/correction, and organized output saving. The ultimate goal is to identify the best model for generating reliable and efficient cloud inspection scripts, initially focusing on AWS, with future expansion to GCP and Azure.
+**Objective:** Develop a Python-based system using LangChain, LangGraph, and LangSmith to generate and execute cloud inspection code. The system should:
 
-**Detailed Requirements:**
+1. Use predefined prompts to generate canonical Python code for cloud resource inspection
+2. Generate new prompts using reasoning models
+3. Execute generated code in isolated environments
+4. Automatically fix syntax and API-related errors based on execution feedback
+5. Support comprehensive cloud inspection including resources, configurations, metrics, and logs
+6. Compare different LLM models (OpenAI, Anthropic, Local, Amazon Bedrock) for:
+   * Code generation quality and correctness
+   * Cost efficiency and performance
+   * Problem-solving capabilities
+7. Support end-to-end troubleshooting workflow:
+   * Convert user problems into code generation prompts
+   * Generate and execute inspection code
+   * Collect and format data for agent consumption
+   * Provide context for problem resolution
 
-1. **Prompt Management:**
-    * Accept user-provided prompts (natural language requests for AWS actions).
-    * Optionally allow for prompt engineering (modifying user prompts for better LLM performance).
-    * Support a list of prompts for batch code generation.
+**Current Implementation Status:**
 
-2. **LLM Integration:**
-    * Modular design to easily integrate new LLMs.
-    * Handle API authentication and requests for each LLM.
-    * Support configuration of LLM parameters (e.g., temperature, max tokens).
+1. **Prompt Management:** ✅
+    * YAML-based prompt system implemented
+    * Variable validation and injection
+    * Template system with model-specific adjustments
+    * Service-based organization with tagging
 
-3. **Code Generation:**
-    * Generate Python code using boto3 based on the provided prompts.
-    * Handle potential errors in generated code gracefully.
+2. **LLM Integration:** ✅
+    * Model registry with YAML configuration
+    * Provider-specific parameter handling
+    * Capability-based model selection
+    * Structured output parsing
 
-4. **Automated Code Review and Correction:**
-    * Implement a mechanism to review the generated code for correctness, security vulnerabilities, and adherence to best practices.
-    * Use an LLM or other static analysis tools for this review.
-    * Attempt to automatically fix identified issues.
+3. **Code Generation:** ✅
+    * Robust error handling
+    * Code formatting and validation
+    * Automatic import management
+    * Token limit handling with continuation support
 
-5. **Output Management:**
-    * Save generated code in separate files, organized by LLM and prompt.
-    * Use descriptive file names (e.g., `prompt_name_llm_name.py`).
-    * Maintain a log of the generation process, including prompts, LLM responses, and review results.
+4. **Code Review and Correction:** ✅
+    * Syntax validation
+    * Import statement verification
+    * Basic security checks
+    * Automatic code formatting (black, autopep8, autoflake)
 
-6. **AWS Focus (Initial):**
-    * Prioritize generating code for common AWS inspection tasks (e.g., listing EC2 instances, checking S3 bucket configurations, retrieving CloudWatch metrics).
+5. **Output Management:** ✅
+    * Organized output directory structure
+    * Metadata tracking
+    * LangSmith integration for monitoring
+    * Result filtering and statistics
 
-7. **Extensibility:**
-    * Design the project to be easily extensible to support GCP and Azure in the future.
+6. **AWS Focus:** ✅
+    * Initial AWS prompts implemented
+    * boto3 integration
+    * IAM policy generation
+    * Service-specific templates
 
-**Deliverables:**
+**New Enhancement Opportunities:**
 
-* A well-structured Python project with clear documentation.
-* A set of example prompts and generated code for AWS inspection tasks.
-* A comparative analysis of the LLM performance based on code correctness, efficiency, and adherence to best practices.
+1. **LangGraph Integration:**
+    * Implement feedback loops for code generation and execution
+    * Add reasoning chains for prompt generation
+    * Create error correction workflows
+    * Add execution result analysis
 
-**Task List Generation Request:**
+2. **Sandbox Environment:**
+    * Docker container execution support
+    * Python venv management
+    * Resource access configuration
+    * Execution isolation and cleanup
 
-Generate a detailed task list for implementing this project. The task list should include specific coding tasks, testing tasks, and documentation tasks. Organize the tasks into logical phases (e.g., setup, prompt management, LLM integration, code generation, review/correction, output management, testing, documentation). For each task provide short description and expected outcome.
+3. **Automated Error Correction:**
+    * Runtime error detection
+    * API error analysis
+    * Code modification suggestions
+    * Automatic fix application
 
-**Output format:**
+4. **Advanced Analysis:**
+    * Static code analysis integration (e.g., Bandit for security)
+    * Cost estimation for AWS operations
+    * Resource usage optimization suggestions
+    * Compliance checking (e.g., AWS Well-Architected Framework)
 
-Use Markdown format for the task list and project structure.
+5. **Testing Enhancement:**
+    * Automated test case generation
+    * Mock data creation
+    * Integration test templates
+    * Local execution simulation
+
+6. **User Experience:**
+    * Interactive prompt refinement
+    * Real-time validation feedback
+    * Rich terminal output
+    * Web interface option
+
+7. **Model Expansion:**
+    * Add reasoning model support
+    * Enhance prompt generation capabilities
+    * Improve error analysis models
+    * Add code correction models
+
+8. **Multi-Cloud Support:**
+    * GCP template system
+    * Azure integration
+    * Cross-cloud resource mapping
+    * Cloud-agnostic abstractions
+
+9. **LLM Comparison Framework:**
+    * Model performance tracking
+    * Cost analysis system
+    * Quality metrics collection
+    * Comparative analysis reporting
+
+10. **Problem-Solving Workflow:**
+    * Problem-to-prompt conversion
+    * Context extraction from results
+    * Data formatting for agents
+    * Solution suggestion system
 
 **Important Considerations:**
 
-* Error handling should be a priority.
-* Security best practices should be followed when generating code that interacts with cloud APIs.
-* The project should be easy to set up and run.
-* Clear documentation is essential.
+* Maintain high code quality standards
+* Focus on security best practices
+* Ensure easy setup and usage
+* Keep documentation current
+* Ensure sandbox security
+* Handle API credentials safely
+* Track model performance metrics
+* Measure cost per successful execution
+* Ensure consistent evaluation criteria
+* Support problem-specific metrics

@@ -29,6 +29,7 @@ cp .env.example .env
 ```
 
 Required environment variables:
+
 - `OPENAI_API_KEY` - Your OpenAI API key
 - `LANGCHAIN_API_KEY` - Your LangSmith API key
 - `LANGCHAIN_PROJECT` - LangSmith project name (default: "cloud-inspector")
@@ -47,65 +48,88 @@ Options:
 
 ### Prompt Management
 
-List available prompts:
 ```bash
-# Basic list
-cloud-inspector prompts list
+# List prompts
+cloud-inspector prompt list [OPTIONS]
+Options:
+  --tag TEXT          Filter prompts by tag
+  --service TEXT      Filter prompts by AWS service
+  --format [text|json|table]  Output format (default: text)
 
-# Filter by tag
-cloud-inspector prompts list --tag security
+# Show prompt details
+cloud-inspector prompt show NAME
 
-# Filter by AWS service
-cloud-inspector prompts list --service ec2
+# Validate prompt file
+cloud-inspector prompt validate FILE
 
-# Different output formats
-cloud-inspector prompts list --format json
-cloud-inspector prompts list --format table
-```
-
-Show prompt details:
-```bash
-cloud-inspector prompts show PROMPT_NAME
-```
-
-Validate a prompt file:
-```bash
-cloud-inspector prompts validate path/to/prompt.yaml
-```
-
-### Code Generation
-
-Generate AWS code:
-```bash
-# Using default model (gpt-4o-mini)
-cloud-inspector workflow generate list_instances -v region=us-west-2
-
-# Using a specific model with multiple variables
-cloud-inspector workflow generate create_bucket --model gpt-4-turbo -v bucket_name=my-bucket -v region=us-west-2
-```
-
-List generation results:
-```bash
-# List all results
-cloud-inspector workflow list-results
-
-# Filter results
-cloud-inspector workflow list-results --prompt list_instances
-cloud-inspector workflow list-results --model gpt-4-turbo
-cloud-inspector workflow list-results --start "2024-01-01T00:00:00"
-cloud-inspector workflow list-results --end "2024-12-31T23:59:59"
-```
-
-View execution statistics:
-```bash
-cloud-inspector workflow stats
+# Generate new prompt
+cloud-inspector prompt generate [OPTIONS]
+Options:
+  --cloud TEXT    Cloud provider (e.g., aws, gcp, azure) [required]
+  --service TEXT  Service name within the cloud provider [required]
+  --request TEXT  Description of the prompt to generate [required]
+  --model TEXT    Name of the LLM model to use (default: gpt-4o)
 ```
 
 ### Model Management
 
-List available models:
 ```bash
-cloud-inspector models list
+# List available models
+cloud-inspector model list
+```
+
+### Code Generation
+
+```bash
+# Generate code
+cloud-inspector code generate [OPTIONS] PROMPT_NAME
+Options:
+  --model TEXT        Name of the LLM model to use (default: gpt-4o-mini)
+  --var, -v TEXT     Variables in key=value format (multiple allowed)
+
+# List generation results
+cloud-inspector code list [OPTIONS]
+Options:
+  --prompt TEXT      Filter by prompt name
+  --model TEXT       Filter by model name
+  --start DATETIME   Filter from this start time
+  --end DATETIME     Filter until this end time
+
+# View statistics
+cloud-inspector code stats
+```
+
+### Example Usage
+
+Generate code with variables:
+
+```bash
+cloud-inspector code generate list_instances \
+  --model gpt-4-turbo \
+  -v region=us-west-2 \
+  -v instance_id=i-1234abcd
+```
+
+Generate a new prompt:
+
+```bash
+cloud-inspector prompt generate \
+  --cloud aws \
+  --service ec2 \
+  --request "Create a script to monitor EC2 instance CPU and memory usage" \
+  --model gpt-4o
+```
+
+List prompts in table format:
+
+```bash
+cloud-inspector prompt list --format table --service ec2
+```
+
+View code generation statistics:
+
+```bash
+cloud-inspector code stats
 ```
 
 ### Output Structure
@@ -118,7 +142,8 @@ Each code generation creates a timestamped directory containing:
 - `metadata.json` - Generation metadata and analysis results
 
 Example output directory:
-```
+
+```text
 generated_code/
   list_instances_gpt-4o-mini_20240315_123456/
     main.py
@@ -129,19 +154,19 @@ generated_code/
 
 ### Performance Monitoring
 
-All code generation runs are automatically tracked in LangSmith. You can:
+All code generation runs are automatically tracked in LangSmith. Statistics available via `code stats` include:
 
-- View detailed traces of each run
-- Monitor token usage and costs
-- Compare performance across different models
-- Analyze error patterns
-- Track success rates
+- Total executions and success rates
+- Model-specific performance metrics
+- Prompt-specific success rates
+- Common error patterns
+- Execution time statistics
 
-Visit [LangSmith Dashboard](https://smith.langchain.com) to access these metrics.
+Visit [LangSmith Dashboard](https://smith.langchain.com) for detailed metrics.
 
 ## Project Structure
 
-```
+```text
 cloud-inspector/
 ├── prompts/              # YAML prompt templates
 ├── generated_code/       # Generated code output
