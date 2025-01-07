@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from typing import Optional, Tuple
 from datetime import datetime
 from langchain_core.messages import BaseMessage
@@ -64,37 +65,53 @@ class PromptGenerator:
         # Create the system message
         system_message = f"""
 Act as a professional {cloud} Python DevOps engineer.
-Your task is to inspect the customer request and generate a prompt for our {cloud} script generator tool.
+Your task is to inspect the customer request and generate a prompt that will:
+1. Use provided information without making assumptions
+2. Include code logic to discover missing but required information
+3. Handle multiple possible configurations/services
+
+IMPORTANT: Always use ${{variable_name}} syntax for variables in description and template sections.
+Example: "Investigate ${{bucket_name}} in ${{region}}" (NOT using {{variable_name}})
+
+Variable Handling Rules:
+1. Only create variables for explicitly provided values in the request (IDs, names, ARNs, regions, zones) or those that are needed but cannot be discovered
+2. For missing but required information, include discovery logic in the template
+2. Replace values with ${{variable_name}} format in description and template
+3. Do NOT include variables for cloud credentials (handled by runtime environment)
+4. Define all required variables in the variables section
+
 The prompt should help generate code that:
 1. Uses {cloud} API (Python) to fetch all relevant configuration, logs, and monitoring data
-2. Produces working, production-ready Python code that can be executed directly
+2. Produces correct, working, production-ready Python code that can be executed directly
 3. Follows best practices for error handling and logging
 4. Returns data in a structured JSON format for easy analysis
 
 The generated prompt should follow this structure (YAML format):
 service: The {cloud} service (e.g., ec2, s3)
 operation: Type of operation (e.g., troubleshoot, analyze)
-description: Clear description of what the code will do
+description: Clear description using {{variable_name}} syntax for known variables
 template: |
-  A clear, concise list of requirements in this format:
+  A clear, concise list of requirements using {{variable_name}} syntax:
   1. Core Functionality
-     - Main tasks the code should perform
-     - Key API calls to make
-     - Data to collect
-
+     - First list steps to discover missing information
+     - Then list steps to analyze the discovered configuration
+     - Use ${{variable_name}} syntax for variables
+     - Use cloud API calls to fetch data
+     - Collect all relevant data for analysis
   2. Error Handling & Logging
-     - Required error cases to handle
-     - Logging requirements
-
+     - Handle errors for each discovery and analysis step
+     - Log all discovered information
   3. Output Format
-     - JSON structure with example fields
-     - Expected data types
+     - JSON structure showing both discovered and analyzed information
 variables:
-  - name: required_input_1
-    description: Description of the first required input for this specific operation
-  - name: required_input_2
-    description: Description of the second required input for this specific operation
+  - name: variable_name # Without ${{ }} syntax in name
+    description: Clear description of what this variable represents and any constraints
   # Add all required inputs specific to this service and operation
+  # Example:
+  # - name: instance_id
+  #   description: ID of the instance to analyze
+  # - name: region
+  #   description: Region where the resources are located
 tags: Relevant tags for categorization (as a list)
 """
 
@@ -113,6 +130,7 @@ Focus on:
 2. Key data points to collect
 3. Success/failure criteria
 4. Output structure
+5. Use of variables (like {{variable}}) for dynamic values in template
 """
 
         # Format messages based on system prompt support
@@ -158,6 +176,21 @@ Focus on:
             # Parse YAML content
             data = yaml.safe_load(content)
 
+            # Validate variable usage
+            description = data.get("description", "").strip()
+            template = data.get("template", "").strip()
+            variables = data.get("variables", [])
+
+            # Extract all {{variable}} patterns from description and template
+            variable_pattern = r'\$\{([^}]+)\}'
+            used_variables = set(re.findall(variable_pattern, description + template))
+
+            # Validate all used variables are defined
+            defined_variables = {v["name"] for v in variables}
+            undefined_vars = used_variables - defined_variables
+            if undefined_vars:
+                raise ValueError(f"Variables used but not defined: {undefined_vars}")
+
             # Convert to GeneratedPrompt
             return GeneratedPrompt(
                 service=data.get("service", "").strip(),
@@ -191,7 +224,7 @@ Focus on:
                     "template": prompt.template,
                     "variables": prompt.variables,
                     "tags": prompt.tags,
-                    "cloud": prompt.cloud,
+                    "cloud": prompt.cloud.value,
                     "prompt_type": "generated",
                     "generated_by": model_name,
                     "generated_at": datetime.now().isoformat(),
