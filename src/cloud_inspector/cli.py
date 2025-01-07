@@ -72,6 +72,8 @@ def prompt():
 @prompt.command(name="list")
 @click.option("--tag", help="Filter prompts by tag")
 @click.option("--service", help="Filter prompts by AWS service")
+@click.option("--cloud", help="Filter by cloud provider (aws, gcp, azure)")
+@click.option("--type", "prompt_type", help="Filter by type (predefined, generated)")
 @click.option(
     "--format",
     type=click.Choice(["text", "json", "table"], case_sensitive=False),
@@ -80,39 +82,64 @@ def prompt():
 )
 @click.pass_context
 def list_prompts(
-    ctx: click.Context, tag: Optional[str], service: Optional[str], format: str
+    ctx: click.Context,
+    tag: Optional[str],
+    service: Optional[str],
+    cloud: Optional[str],
+    prompt_type: Optional[str],
+    format: str,
 ):
-    """List all available prompts. Optionally filter by tag and/or service."""
+    """List all available prompts. Optionally filter by tag, service, cloud, and type."""
     prompt_manager = ctx.obj["prompt_manager"]
-
-    # Get all prompts first
     available_prompts = prompt_manager.list_prompts()
 
     if not available_prompts:
-        click.echo("No prompts found.")
+        click.echo("No prompts available.")
         return
 
-    # Apply filters if specified
+    # Apply filters
     if tag:
         available_prompts = [p for p in available_prompts if tag in p["tags"]]
     if service:
+        available_prompts = [p for p in available_prompts if p["service"] == service]
+    if cloud:
+        available_prompts = [p for p in available_prompts if p["cloud"] == cloud]
+    if prompt_type:
         available_prompts = [
-            p for p in available_prompts if p["service"].lower() == service.lower()
+            p for p in available_prompts if p["prompt_type"] == prompt_type
         ]
 
     if not available_prompts:
         click.echo("No prompts found matching the specified filters.")
         return
 
-    # Format output based on selected format
     if format == "json":
-        click.echo(json.dumps(available_prompts, indent=2))
+        click.echo(json.dumps(available_prompts, indent=2, default=str))
 
     elif format == "table":
-        # Prepare data for tabulate
-        headers = ["Name", "Service", "Operation", "Description"]
+        headers = [
+            "Name",
+            "Cloud",
+            "Service",
+            "Operation",
+            "Type",
+            "Source",
+            "Description",
+        ]
         table_data = [
-            [p["name"], p["service"], p["operation"], p["description"]]
+            [
+                p["name"],
+                p["cloud"].value,
+                p["service"],
+                p["operation"],
+                "🤖" if p["prompt_type"] == "generated" else "📋",
+                p["generated_by"] or "manual",
+                (
+                    (p["description"][:60] + "...")
+                    if len(p["description"]) > 60
+                    else p["description"]
+                ),
+            ]
             for p in available_prompts
         ]
         click.echo(
@@ -120,21 +147,32 @@ def list_prompts(
                 table_data,
                 headers=headers,
                 tablefmt="pretty",
-                colalign=("left", "left", "left", "left"),
+                colalign=("left", "left", "left", "left", "center", "left", "left"),
             )
         )
 
-    else:  # text format (default)
-        # Find maximum name length for alignment
+    else:  # text format
         max_name_length = max(len(p["name"]) for p in available_prompts)
+        max_source_length = max(
+            len(p["generated_by"] or "manual") for p in available_prompts
+        )
 
         click.echo("\nAvailable Prompts:")
-        click.echo("=" * (max_name_length + 40))
+        click.echo("=" * (max_name_length + 60))
 
         for prompt in available_prompts:
-            # Format with aligned description
+            type_icon = "🤖" if prompt["prompt_type"] == "generated" else "📋"
+            source = prompt["generated_by"] or "manual"
+            description = prompt["description"]
+            if len(description) > 60:
+                description = description[:60] + "..."
+
             formatted_line = (
-                f"{prompt['name']:<{max_name_length}}    {prompt['description']}"
+                f"{prompt['name']:<{max_name_length}} "
+                f"{type_icon} "
+                f"[{prompt['cloud'].value}] "
+                f"[{source:<{max_source_length}}]    "
+                f"{description}"
             )
             click.echo(formatted_line)
 
@@ -154,9 +192,18 @@ def show(ctx: click.Context, name: str):
     click.echo("\nPrompt Details:")
     click.echo("=" * 80)
     click.echo(f"Name: {name}")
+    click.echo(f"Cloud: {prompt.cloud}")
     click.echo(f"Service: {prompt.service}")
     click.echo(f"Operation: {prompt.operation}")
     click.echo(f"Description: {prompt.description}")
+    click.echo(
+        f"Type: {'Generated' if prompt.prompt_type == 'generated' else 'Predefined'}"
+    )
+
+    if prompt.generated_by:
+        click.echo(f"Generated By: {prompt.generated_by}")
+    if prompt.generated_at:
+        click.echo(f"Generated At: {prompt.generated_at}")
 
     if prompt.variables:
         click.echo("\nVariables:")
@@ -242,7 +289,7 @@ def code():
 
 
 @code.command(name="generate")
-@click.argument("prompt_name")
+@click.option("--prompt", "prompt_name", required=True, help="Name of the prompt to use.")
 @click.option("--model", default="gpt-4o-mini", help="Name of the LLM model to use.")
 @click.option("--var", "-v", multiple=True, help="Variables in key=value format.")
 @click.pass_context

@@ -29,6 +29,7 @@ prompts:
       - ec2
       - list
       - instances
+    cloud: aws
 
   get_instance_metrics:
     service: ec2
@@ -60,6 +61,7 @@ prompts:
       - ec2
       - metrics
       - monitoring
+    cloud: aws
 
   # S3 Prompts
   analyze_bucket:
@@ -87,6 +89,7 @@ prompts:
       - s3
       - analysis
       - storage
+    cloud: aws
 
   # CloudWatch Prompts
   create_dashboard:
@@ -116,6 +119,7 @@ prompts:
       - cloudwatch
       - dashboard
       - monitoring
+    cloud: aws
 
   troubleshoot_s3_trigger:
     service: s3
@@ -154,6 +158,7 @@ prompts:
       - s3
       - troubleshooting
       - triggers
+    cloud: aws
 
   troubleshoot_ec2_connection:
     service: ec2
@@ -219,8 +224,10 @@ prompts:
       - troubleshooting
       - connectivity
       - misconfigurations
+    cloud: aws
 
   troubleshoot_ec2_connection_2:
+    cloud: aws
     service: ec2
     operation: troubleshoot_connection
     description: "Troubleshoot connection issues to an EC2 instance"

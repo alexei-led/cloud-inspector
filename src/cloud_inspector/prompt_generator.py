@@ -1,12 +1,11 @@
 from pathlib import Path
-from typing import Optional, Literal
+from typing import Optional, Tuple
+from datetime import datetime
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 from langchain_components.models import ModelRegistry, ModelCapability
 import yaml
-from datetime import datetime
-
-CloudProvider = Literal["AWS", "GCP", "Azure"]
+from cloud_inspector.prompts import CloudProvider, PromptType
 
 
 class GeneratedPrompt(BaseModel):
@@ -18,6 +17,10 @@ class GeneratedPrompt(BaseModel):
     template: str
     variables: list[dict[str, str]]  # Each dict has 'name' and 'description' keys
     tags: list[str]
+    cloud: CloudProvider
+    prompt_type: PromptType = PromptType.GENERATED
+    generated_by: Optional[str] = None
+    generated_at: Optional[datetime] = None
 
 
 class PromptGenerator:
@@ -35,9 +38,9 @@ class PromptGenerator:
         model_name: str,
         service: str,
         request: str,
-        cloud: CloudProvider = "AWS",
+        cloud: CloudProvider = CloudProvider.AWS,
         **kwargs,
-    ) -> tuple[GeneratedPrompt, Path]:
+    ) -> Tuple[GeneratedPrompt, Path]:
         """Generate a prompt template from a natural language request."""
 
         # Validate model can generate prompts
@@ -163,6 +166,10 @@ Focus on:
                 template=data.get("template", "").strip(),
                 variables=data.get("variables", []),
                 tags=data.get("tags", []),
+                cloud=CloudProvider(data.get("cloud", "aws").lower()),
+                prompt_type=PromptType.GENERATED,
+                generated_by=data.get("generated_by", "").strip(),
+                generated_at=datetime.now().isoformat(),
             )
         except Exception as e:
             raise ValueError(f"Failed to parse model response: {e}")
@@ -170,19 +177,24 @@ Focus on:
     def _save_prompt(self, model_name: str, prompt: GeneratedPrompt) -> Path:
         """Save the generated prompt to a YAML file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = (
-            f"prompt_{prompt.service}_{prompt.operation}_{model_name}_{timestamp}.yaml"
-        )
+
+        # Create a unique name for the prompt
+        prompt_name = f"{prompt.service}_{prompt.operation}_{model_name}_{timestamp}"
+        filename = f"prompt_{prompt_name}.yaml"
 
         prompt_data = {
             "prompts": {
-                f"{prompt.service}_{prompt.operation}": {
+                prompt_name: {
                     "service": prompt.service,
                     "operation": prompt.operation,
                     "description": prompt.description,
                     "template": prompt.template,
                     "variables": prompt.variables,
                     "tags": prompt.tags,
+                    "cloud": prompt.cloud,
+                    "prompt_type": "generated",
+                    "generated_by": model_name,
+                    "generated_at": datetime.now().isoformat(),
                 }
             }
         }
@@ -191,8 +203,8 @@ Focus on:
         yaml.SafeDumper.org_represent_str = yaml.SafeDumper.represent_str
 
         def repr_str(dumper, data):
-            if '\n' in data:
-                return dumper.represent_scalar(u'tag:yaml.org,2002:str', data, style='|')
+            if "\n" in data:
+                return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
             return dumper.org_represent_str(data)
 
         yaml.add_representer(str, repr_str, Dumper=yaml.SafeDumper)

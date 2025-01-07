@@ -2,6 +2,8 @@
 
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set
+from enum import Enum
+from datetime import datetime
 
 import yaml
 from langchain_core.prompts import ChatPromptTemplate
@@ -92,6 +94,21 @@ The **output produced by the script** must be in a **structured, LLM-friendly JS
 """
 
 
+class CloudProvider(str, Enum):
+    """Supported cloud providers."""
+
+    AWS = "aws"
+    GCP = "gcp"
+    AZURE = "azure"
+
+
+class PromptType(str, Enum):
+    """Type of prompt - predefined or generated."""
+
+    PREDEFINED = "predefined"
+    GENERATED = "generated"
+
+
 class PromptTemplate(BaseModel):
     """Single prompt template definition."""
 
@@ -105,6 +122,17 @@ class PromptTemplate(BaseModel):
         default_factory=list, description="List of variables with name and description"
     )
     tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    cloud: CloudProvider = Field(..., description="Cloud provider")
+    prompt_type: Optional[PromptType] = Field(
+        default=PromptType.PREDEFINED,
+        description="Type of prompt - predefined or generated",
+    )
+    generated_by: Optional[str] = Field(
+        None, description="Model used to generate the prompt"
+    )
+    generated_at: Optional[datetime] = Field(
+        None, description="Timestamp when the prompt was generated"
+    )
 
     def format_messages(
         self, variables: Dict[str, Any], supports_system_prompt: bool = True
@@ -152,24 +180,55 @@ class PromptCollection(BaseModel):
 class PromptManager:
     """Manager for handling prompt templates."""
 
-    def __init__(self, prompt_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        prompt_dir: Optional[Path] = None,
+        generated_prompt_dir: Optional[Path] = None,
+    ):
         self.prompt_dir = prompt_dir or Path("prompts")
+        self.generated_prompt_dir = generated_prompt_dir or Path("generated_prompts")
         self.prompts: Dict[str, PromptTemplate] = {}
         self._load_prompts()
 
     def _load_prompts(self) -> None:
-        """Load all prompt files from the prompt directory."""
-        if not self.prompt_dir.exists():
-            return
+        """Load prompts from both predefined and generated directories."""
+        # Load predefined prompts
+        if self.prompt_dir.exists():
+            for file in self.prompt_dir.glob("*.yaml"):
+                try:
+                    with file.open("r") as f:
+                        data = yaml.safe_load(f)
+                        collection = PromptCollection(prompts=data.get("prompts", {}))
+                        # Set prompt_type for predefined prompts
+                        for prompt in collection.prompts.values():
+                            prompt.prompt_type = PromptType.PREDEFINED
+                        self.prompts.update(collection.prompts)
+                except Exception as e:
+                    print(f"Error loading prompts from {file}: {e}")
 
-        for file in self.prompt_dir.glob("*.yaml"):
-            try:
-                with file.open("r") as f:
-                    data = yaml.safe_load(f)
-                    collection = PromptCollection(prompts=data.get("prompts", {}))
-                    self.prompts.update(collection.prompts)
-            except Exception as e:
-                print(f"Error loading prompts from {file}: {e}")
+        # Load generated prompts
+        if self.generated_prompt_dir.exists():
+            for file in self.generated_prompt_dir.glob("*.yaml"):
+                try:
+                    with file.open("r") as f:
+                        data = yaml.safe_load(f)
+                        collection = PromptCollection(prompts=data.get("prompts", {}))
+                        # Extract metadata from filename
+                        # Format: prompt_service_operation_model_YYYYMMDD_HHMMSS.yaml
+                        parts = file.stem.split("_")
+                        if len(parts) >= 6:  # Changed from 5 to 6 to match format
+                            timestamp_str = f"{parts[-2]}_{parts[-1]}"  # Combine date and time parts
+                            timestamp = datetime.strptime(
+                                timestamp_str, "%Y%m%d_%H%M%S"
+                            )
+                            model = parts[-3]  # Model is now third from last
+                            for prompt in collection.prompts.values():
+                                prompt.prompt_type = PromptType.GENERATED
+                                prompt.generated_by = model
+                                prompt.generated_at = timestamp
+                        self.prompts.update(collection.prompts)
+                except Exception as e:
+                    print(f"Error loading generated prompts from {file}: {e}")
 
     def get_prompt(self, name: str) -> Optional[PromptTemplate]:
         """Get a prompt template by name."""
@@ -185,6 +244,12 @@ class PromptManager:
                 "description": prompt.description,
                 "variables": prompt.variables,
                 "tags": prompt.tags,
+                "cloud": prompt.cloud,
+                "prompt_type": prompt.prompt_type,
+                "generated_by": prompt.generated_by,
+                "generated_at": (
+                    prompt.generated_at.isoformat() if prompt.generated_at else None
+                ),
             }
             for name, prompt in self.prompts.items()
         ]
@@ -222,7 +287,9 @@ class PromptManager:
             return None
 
         # Validate all required variables are provided
-        missing_vars = set(prompt.variables) - set(variables.keys())
+        required_var_names = {var["name"] for var in prompt.variables}
+        provided_var_names = set(variables.keys())
+        missing_vars = required_var_names - provided_var_names
         if missing_vars:
             raise ValueError(f"Missing required variables: {missing_vars}")
 
