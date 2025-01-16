@@ -209,7 +209,7 @@ class CodeGenerationWorkflow:
                     timestamp=start_time,
                     execution_time=(datetime.now() - start_time).total_seconds(),
                     success=True,
-                    run_id=runs_cb.traced_runs[0].id,
+                    run_id=str(runs_cb.traced_runs[0].id),
                     generated_files=generated_files,
                 )
 

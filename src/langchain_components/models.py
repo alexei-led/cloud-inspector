@@ -123,9 +123,10 @@ class OpenAIStrategy(ProviderStrategy):
         if model_config.openai and model_config.openai.response_format:
             model_kwargs["response_format"] = model_config.openai.response_format
 
+        api_key = os.getenv(provider_config.api_key_env or "")
         return ChatOpenAI(
-            api_key=os.getenv(provider_config.api_key_env),
-            organization=os.getenv(provider_config.organization_env),
+            api_key=SecretStr(api_key) if api_key else None,
+            organization=os.getenv(provider_config.organization_env or ""),
             frequency_penalty=(model_config.openai.frequency_penalty if model_config.openai else None),
             presence_penalty=(model_config.openai.presence_penalty if model_config.openai else None),
             model_kwargs=model_kwargs,
@@ -143,8 +144,9 @@ class AnthropicStrategy(ProviderStrategy):
         provider_config: ProviderConfig,
     ) -> BaseLanguageModel:
         params = self._get_common_params(model_config.common)
+        api_key = os.getenv(provider_config.api_key_env or "") or ""
         return ChatAnthropic(
-            api_key=SecretStr(os.getenv(provider_config.api_key_env)),
+            api_key=SecretStr(api_key),
             **params,
         )
 
@@ -159,13 +161,14 @@ class GoogleStrategy(ProviderStrategy):
         provider_config: ProviderConfig,
     ) -> BaseLanguageModel:
         params = self._get_common_params(model_config.common)
+        api_key = os.getenv(provider_config.api_key_env or "")
         if model_config.google:
             if model_config.google.response_schema:
                 params["response_schema"] = model_config.google.response_schema
             if model_config.google.response_mime_type:
                 params["response_mime_type"] = model_config.google.response_mime_type
 
-        return ChatGoogleGenerativeAI(api_key=SecretStr(os.getenv(provider_config.api_key_env)), **params)
+        return ChatGoogleGenerativeAI(api_key=SecretStr(api_key) if api_key else None, **params)
 
     def get_structured_output_params(self, output_type: type) -> dict[str, Any]:
         return {"include_raw": True}
@@ -181,7 +184,7 @@ class OllamaStrategy(ProviderStrategy):
         if model_config.ollama and model_config.ollama.repeat_penalty is not None:
             params["repeat_penalty"] = model_config.ollama.repeat_penalty
 
-        base_url = os.getenv(provider_config.base_url_env, provider_config.default_base_url)
+        base_url = os.getenv(provider_config.base_url_env or "", provider_config.default_base_url)
         return ChatOllama(base_url=base_url, **params)
 
     def get_structured_output_params(self, output_type: type) -> dict[str, Any]:
@@ -196,9 +199,9 @@ class BedrockStrategy(ProviderStrategy):
     ) -> BaseLanguageModel:
         params = self._get_common_params(model_config.common)
         return ChatBedrock(
-            region=os.getenv(provider_config.region_env, provider_config.default_region),
-            credentials_profile_name=os.getenv(provider_config.profile_env),
-            model_id=model_config.common.model_id,
+            region=os.getenv(provider_config.region_env or "", provider_config.default_region),
+            credentials_profile_name=os.getenv(provider_config.profile_env or ""),
+            model=model_config.common.model_id,
             model_kwargs=params,
             beta_use_converse_api=True,
         )
@@ -250,19 +253,21 @@ class ModelRegistry:
             if "stop" in model_data:
                 common_params["stop"] = model_data["stop"]
 
-            provider_specific = {}
+            openai_params = None
+            ollama_params = None
+            google_params = None
             if model_data["provider"] == "openai":
-                provider_specific["openai"] = OpenAIParams(
+                openai_params = OpenAIParams(
                     frequency_penalty=model_data.get("frequency_penalty"),
                     presence_penalty=model_data.get("presence_penalty"),
                     response_format=model_data.get("response_format"),
                 )
             elif model_data["provider"] == "ollama":
-                provider_specific["ollama"] = OllamaParams(
+                ollama_params = OllamaParams(
                     repeat_penalty=model_data.get("repeat_penalty"),
                 )
             elif model_data["provider"] == "google":
-                provider_specific["google"] = GoogleParams(
+                google_params = GoogleParams(
                     response_schema=model_data.get("response_schema"),
                     response_mime_type=model_data.get("response_mime_type"),
                 )
@@ -270,7 +275,9 @@ class ModelRegistry:
             self.models[name] = ModelConfig(
                 provider=model_data["provider"],
                 common=CommonModelParams(**common_params),
-                **provider_specific,
+                openai=openai_params,
+                ollama=ollama_params,
+                google=google_params,
                 supports_system_prompt=model_data.get("supports_system_prompt", True),
             )
 
