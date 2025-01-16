@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloud-inspector"
+version = "0.1.0"
+description = "A tool for comparing LLM code generation capabilities for cloud inspection tasks"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "boto3",
+    "click",
+    "langchain",
+    "langchain_openai",
+    "langchain_anthropic",
+    "langchain_aws",
+    "langchain_ollama",
+    "langchain-google-genai",
+    "langgraph",
+    "langsmith",
+    "libcst",
+    "pydantic",
+    "pyyaml",
+    "tabulate",
+]
+
+[project.scripts]
+cloud-inspector = "cloud_inspector.cli:cli"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "pytest-cov",
+    "setuptools",
+]
+
+[tool.ruff]
+line-length = 130
+# Enable additional rules including those previously covered by isort
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "YTT", # flake8-2020
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+

@@ -4,18 +4,48 @@
 
 ### 3.1 LangGraph Integration
 
-- [ ] Implement feedback loops
-  - [ ] Create code generation DAG
-  - [ ] Add execution feedback chain
-  - [ ] Implement error correction loop
-  - [ ] Add result analysis nodes
-- [ ] Add reasoning chains
-  - [x] Basic prompt generation workflow
-  - [ ] Advanced prompt discovery and management
-  - [ ] Multi-model orchestration chain
-  - [ ] Output validation chain
+- [ ] Implement basic LangGraph loop with descriptive nodes
+  - [ ] Create initial state schema
+  - [ ] Create a `GeneratePrompt` node (initial implementation)
+  - [ ] Create a `GenerateCode` node (initial implementation)
+  - [ ] Create an `ExecuteCode` node (initial implementation)
+  - [ ] Define a simple `prompt_to_code` transition
+  - [ ] Define a simple `code_to_execute` transition
+  - [ ] Implement basic loop execution
+- [ ] Add feedback to LangGraph loop
+  - [ ] Add a `CollectFeedback` node
+  - [ ] Modify transitions to include feedback
+  - [ ] Implement basic state update based on feedback
+- [ ] Implement conditional transitions based on feedback
+  - [ ] Add logic to `GeneratePrompt` to decide next action based on state
+  - [ ] Implement conditional transitions based on `GeneratePrompt`'s decision
+- [ ] Add cycle detection and limits
+  - [ ] Implement cycle detection logic
+  - [ ] Add a maximum iteration limit
+- [ ] Enhance graph components (iteratively)
+  - [ ] Add result aggregation nodes (initial implementation)
+  - [ ] Implement decision nodes (initial implementation)
+  - [ ] Create error handling branches (initial implementation)
+  - [ ] Add state validation nodes (initial implementation)
 
-### 3.2 Model Integration ✅
+### 3.2 Agent Components
+
+- [ ] `GeneratePrompt` node implementation (iteratively)
+  - [ ] Create basic logic to generate code generation prompt
+  - [ ] Add basic context extraction
+  - [ ] Implement basic result parsing
+  - [ ] Add basic metrics collection
+- [ ] `GenerateCode` node implementation (iteratively)
+  - [ ] Create basic code generation logic
+  - [ ] Add basic prompt strategy selection
+  - [ ] Implement basic branching logic
+  - [ ] Create basic execution path planning
+- [ ] `ExecuteCode` node implementation (iteratively)
+  - [ ] Add basic code execution handler
+  - [ ] Implement basic retry logic
+  - [ ] Add basic result formatting
+
+### 3.3 Model Integration ✅
 
 - [x] Add new model support
   - [x] Model configuration system
@@ -28,7 +58,7 @@
   - [x] Performance monitoring
   - [x] Quality validation
 
-### 3.3 Prompt Management ✅
+### 3.4 Prompt Management ✅
 
 - [x] Basic prompt system
   - [x] YAML-based storage
@@ -41,83 +71,44 @@
   - [ ] Prompt version control
   - [ ] Prompt effectiveness tracking
 
-### 3.4 Code Generation Workflow ✅
+### 3.5 State Management
 
-- [x] Basic workflow
-  - [x] Model selection
-  - [x] Prompt execution
-  - [x] Output formatting
-  - [x] Error handling
-- [x] Advanced features
-  - [x] Token limit handling
-  - [x] Continuation support
-  - [x] Code formatting
-  - [x] Basic validation
+- [ ] LangGraph state handling (iteratively)
+  - [ ] Define initial state interfaces
+  - [ ] Create basic state mutation handlers
+  - [ ] Add basic state validation rules
+  - [ ] Implement basic state persistence
+- [ ] Graph context management (iteratively)
+  - [ ] Add basic node state tracking
+  - [ ] Create basic context propagation
+  - [ ] Implement basic state merging
+  - [ ] Add basic cleanup handlers
 
-### 3.5 LangGraph Orchestration
+### 3.6 Graph Execution
 
-- [ ] Problem-to-code pipeline
-  - [ ] Prompt generation model selection
-  - [ ] Code generation model selection
-  - [ ] Inter-model communication
-  - [ ] Result aggregation
-- [ ] Workflow management
-  - [ ] Step tracking
-  - [ ] Error recovery
-  - [ ] Performance optimization
-  - [ ] Cost management
+- [ ] Core graph runner (iteratively)
+  - [ ] Implement basic graph initialization
+  - [ ] Add basic node execution logic
+  - [ ] Create basic transition handling
+  - [ ] Add basic execution monitoring
+- [ ] Feedback system (iteratively)
+  - [ ] Create basic feedback collectors
+  - [ ] Add basic metric aggregation
+  - [ ] Implement basic state updates
+  - [ ] Add basic cycle detection
 
-### 3.6 Execution Management
+### 3.7 CLI Enhancements
 
-- [ ] Add execution tracking
-  - [ ] Create execution history
-  - [ ] Add resource usage monitoring
-  - [ ] Implement timeout handling
-  - [ ] Add parallel execution support
-- [ ] Implement result analysis
-  - [ ] Add output validation
-  - [ ] Create performance metrics
-  - [ ] Implement error cataloging
-  - [ ] Add success rate tracking
-
-### 3.7 LLM Comparison Framework
-
-- [ ] Implement model tracking
-  - [ ] Add performance metrics collection
-  - [ ] Create cost tracking system
-  - [ ] Implement quality scoring
-  - [ ] Add execution success tracking
-- [ ] Create analysis system
-  - [ ] Add comparative reporting
-  - [ ] Implement cost analysis
-  - [ ] Create quality benchmarks
-  - [ ] Track error patterns
-
-### 3.8 Problem-Solving Workflow
-
-- [ ] Problem analysis system
-  - [ ] Add problem classification
-  - [ ] Create prompt generation rules
-  - [ ] Implement context extraction
-  - [ ] Add solution suggestion
-- [ ] Result processing
-  - [ ] Create data formatting
-  - [ ] Add context organization
-  - [ ] Implement relevance scoring
-  - [ ] Create agent-ready output
-
-### 3.9 Model Evaluation
-
-- [ ] Add evaluation metrics
-  - [ ] Code quality scoring
-  - [ ] Execution success rate
-  - [ ] Problem-solving effectiveness
-  - [ ] Cost efficiency tracking
-- [ ] Create benchmarking system
-  - [ ] Standard test scenarios
-  - [ ] Performance comparisons
-  - [ ] Cost analysis
-  - [ ] Quality assessment
+- [ ] Add iterative commands
+  - [ ] Troubleshooting command
+  - [ ] Progress monitoring
+  - [ ] State inspection
+  - [ ] Execution control
+- [ ] Parameter handling
+  - [ ] Initial state setup
+  - [ ] Iteration control
+  - [ ] Model selection
+  - [ ] Output formatting
 
 ## Success Metrics
 
@@ -126,15 +117,12 @@
 - [x] Execution time tracking
 - [x] Cost monitoring
 - [x] Model comparison metrics
-- [ ] Advanced quality metrics
-- [ ] Cross-cloud compatibility
-- [ ] User satisfaction metrics
-- [ ] Security compliance score
-- [ ] Code execution success rate
-- [ ] Error correction effectiveness
-- [x] Basic prompt generation quality
-- [ ] Advanced prompt management metrics
-- [ ] Multi-model workflow metrics
-- [ ] Problem-solving success rate
-- [ ] Cost per successful execution
-- [ ] Solution relevance score
+- [ ] Iterative execution success rate
+- [ ] Planning accuracy metrics
+- [ ] State management reliability
+- [ ] Context preservation quality
+- [ ] Resolution detection accuracy
+- [ ] Graph execution efficiency
+- [ ] Node transition accuracy
+- [ ] State propagation reliability
+- [ ] Agent decision quality

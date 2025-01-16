@@ -17,7 +17,7 @@ A tool for generating and analyzing AWS code using various LLMs.
 ## Installation
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Configuration
@@ -180,11 +180,14 @@ cloud-inspector/
 │       ├── parsers.py   # Code parsing
 │       └── templates.py # Chat templates
 ├── tests/               # Test suite
-├── setup.py            # Package configuration
 └── README.md
 ```
 
 ## Development
+
+This project uses `pyproject.toml` for dependency management and [Ruff](https://beta.ruff.rs/docs/) for linting and formatting.
+
+Install development dependencies:
 
 Install development dependencies:
 

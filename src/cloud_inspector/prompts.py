@@ -1,9 +1,9 @@
 """Prompt management system for Cloud Inspector."""
 
-from pathlib import Path
-from typing import Optional, Dict, Any, List, Set
-from enum import Enum
 from datetime import datetime
+from enum import Enum
+from pathlib import Path
+from typing import Any, Optional
 
 import yaml
 from langchain_core.prompts import ChatPromptTemplate
@@ -114,29 +114,19 @@ class PromptTemplate(BaseModel):
 
     service: str = Field(..., description="AWS service (e.g., ec2, s3)")
     operation: str = Field(..., description="Operation type (e.g., list, analyze)")
-    description: str = Field(
-        ..., description="Brief description of what the prompt does"
-    )
+    description: str = Field(..., description="Brief description of what the prompt does")
     template: str = Field(..., description="The actual prompt template")
-    variables: List[Dict[str, str]] = Field(
-        default_factory=list, description="List of variables with name and description"
-    )
-    tags: List[str] = Field(default_factory=list, description="Tags for categorization")
+    variables: list[dict[str, str]] = Field(default_factory=list, description="list of variables with name and description")
+    tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     cloud: CloudProvider = Field(..., description="Cloud provider")
     prompt_type: Optional[PromptType] = Field(
         default=PromptType.PREDEFINED,
         description="Type of prompt - predefined or generated",
     )
-    generated_by: Optional[str] = Field(
-        None, description="Model used to generate the prompt"
-    )
-    generated_at: Optional[datetime] = Field(
-        None, description="Timestamp when the prompt was generated"
-    )
+    generated_by: Optional[str] = Field(None, description="Model used to generate the prompt")
+    generated_at: Optional[datetime] = Field(None, description="Timestamp when the prompt was generated")
 
-    def format_messages(
-        self, variables: Dict[str, Any], supports_system_prompt: bool = True
-    ) -> List[Any]:
+    def format_messages(self, variables: dict[str, Any], supports_system_prompt: bool = True) -> list[Any]:
         """Format the prompt into chat messages."""
         # Validate that all required variables are provided
         required_var_names = {var["name"] for var in self.variables}
@@ -144,14 +134,9 @@ class PromptTemplate(BaseModel):
         missing_vars = required_var_names - provided_var_names
 
         if missing_vars:
-            var_descriptions = {
-                var["name"]: var["description"]
-                for var in self.variables
-                if var["name"] in missing_vars
-            }
+            var_descriptions = {var["name"]: var["description"] for var in self.variables if var["name"] in missing_vars}
             raise ValueError(
-                f"Missing required variables: "
-                f"{', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}"
+                f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}"
             )
 
         if supports_system_prompt:
@@ -174,7 +159,7 @@ class PromptTemplate(BaseModel):
 class PromptCollection(BaseModel):
     """Collection of prompt templates."""
 
-    prompts: Dict[str, PromptTemplate]
+    prompts: dict[str, PromptTemplate]
 
 
 class PromptManager:
@@ -187,7 +172,7 @@ class PromptManager:
     ):
         self.prompt_dir = prompt_dir or Path("prompts")
         self.generated_prompt_dir = generated_prompt_dir or Path("generated_prompts")
-        self.prompts: Dict[str, PromptTemplate] = {}
+        self.prompts: dict[str, PromptTemplate] = {}
         self._load_prompts()
 
     def _load_prompts(self) -> None:
@@ -199,7 +184,7 @@ class PromptManager:
                     with file.open("r") as f:
                         data = yaml.safe_load(f)
                         collection = PromptCollection(prompts=data.get("prompts", {}))
-                        # Set prompt_type for predefined prompts
+                        # set prompt_type for predefined prompts
                         for prompt in collection.prompts.values():
                             prompt.prompt_type = PromptType.PREDEFINED
                         self.prompts.update(collection.prompts)
@@ -218,9 +203,7 @@ class PromptManager:
                         parts = file.stem.split("_")
                         if len(parts) >= 6:  # Changed from 5 to 6 to match format
                             timestamp_str = f"{parts[-2]}_{parts[-1]}"  # Combine date and time parts
-                            timestamp = datetime.strptime(
-                                timestamp_str, "%Y%m%d_%H%M%S"
-                            )
+                            timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
                             model = parts[-3]  # Model is now third from last
                             for prompt in collection.prompts.values():
                                 prompt.prompt_type = PromptType.GENERATED
@@ -234,8 +217,8 @@ class PromptManager:
         """Get a prompt template by name."""
         return self.prompts.get(name)
 
-    def list_prompts(self) -> List[Dict[str, Any]]:
-        """List all available prompts with their details."""
+    def list_prompts(self) -> list[dict[str, Any]]:
+        """list all available prompts with their details."""
         return [
             {
                 "name": name,
@@ -247,40 +230,28 @@ class PromptManager:
                 "cloud": prompt.cloud,
                 "prompt_type": prompt.prompt_type,
                 "generated_by": prompt.generated_by,
-                "generated_at": (
-                    prompt.generated_at.isoformat() if prompt.generated_at else None
-                ),
+                "generated_at": (prompt.generated_at.isoformat() if prompt.generated_at else None),
             }
             for name, prompt in self.prompts.items()
         ]
 
-    def get_prompts_by_service(self, service: str) -> List[str]:
+    def get_prompts_by_service(self, service: str) -> list[str]:
         """Get all prompt names for a specific service."""
-        return [
-            name
-            for name, prompt in self.prompts.items()
-            if prompt.service.lower() == service.lower()
-        ]
+        return [name for name, prompt in self.prompts.items() if prompt.service.lower() == service.lower()]
 
-    def get_prompts_by_tag(self, tag: str) -> List[str]:
+    def get_prompts_by_tag(self, tag: str) -> list[str]:
         """Get all prompt names with a specific tag."""
-        return [
-            name
-            for name, prompt in self.prompts.items()
-            if tag.lower() in [t.lower() for t in prompt.tags]
-        ]
+        return [name for name, prompt in self.prompts.items() if tag.lower() in [t.lower() for t in prompt.tags]]
 
-    def get_all_services(self) -> Set[str]:
+    def get_all_services(self) -> set[str]:
         """Get all unique AWS services in the prompts."""
         return {prompt.service for prompt in self.prompts.values()}
 
-    def get_all_tags(self) -> Set[str]:
+    def get_all_tags(self) -> set[str]:
         """Get all unique tags from all prompts."""
         return {tag for prompt in self.prompts.values() for tag in prompt.tags}
 
-    def format_prompt(
-        self, name: str, variables: Dict[str, Any], supports_system_prompt: bool = True
-    ) -> Optional[List[Any]]:
+    def format_prompt(self, name: str, variables: dict[str, Any], supports_system_prompt: bool = True) -> Optional[list[Any]]:
         """Format a prompt template with provided variables."""
         prompt = self.get_prompt(name)
         if not prompt:
@@ -294,15 +265,13 @@ class PromptManager:
             raise ValueError(f"Missing required variables: {missing_vars}")
 
         try:
-            return prompt.format_messages(
-                variables, supports_system_prompt=supports_system_prompt
-            )
+            return prompt.format_messages(variables, supports_system_prompt=supports_system_prompt)
         except KeyError as e:
             raise ValueError(f"Invalid variable in template: {e}")
         except Exception as e:
             raise ValueError(f"Error formatting prompt: {e}")
 
-    def validate_prompt_file(self, file_path: Path) -> List[str]:
+    def validate_prompt_file(self, file_path: Path) -> list[str]:
         """Validate a prompt file format and content."""
         errors = []
         try:

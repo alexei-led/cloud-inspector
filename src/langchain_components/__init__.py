@@ -1,1 +1,1 @@
-"""LangChain components for Cloud Inspector.""" 
+"""LangChain components for Cloud Inspector."""

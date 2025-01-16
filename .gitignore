@@ -10,6 +10,7 @@ __pycache__/
 *.so
 .Python
 build/
+pkg/
 develop-eggs/
 dist/
 downloads/
@@ -40,8 +41,11 @@ ENV/
 # Testing
 .coverage
 htmlcov/
+
+# Caches
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 
 # Project specific
 generated_code/*
