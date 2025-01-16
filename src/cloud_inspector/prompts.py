@@ -267,9 +267,9 @@ class PromptManager:
         try:
             return prompt.format_messages(variables, supports_system_prompt=supports_system_prompt)
         except KeyError as e:
-            raise ValueError(f"Invalid variable in template: {e}")
+            raise ValueError(f"Invalid variable in template: {e}") from e
         except Exception as e:
-            raise ValueError(f"Error formatting prompt: {e}")
+            raise ValueError(f"Error formatting prompt: {e}") from e
 
     def validate_prompt_file(self, file_path: Path) -> list[str]:
         """Validate a prompt file format and content."""

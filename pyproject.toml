@@ -29,17 +29,12 @@ dependencies = [
 cloud-inspector = "cloud_inspector.cli:cli"
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "ruff",
-    "mypy",
-    "pytest-cov",
-    "setuptools",
-]
+dev = ["pytest", "ruff", "mypy", "pytest-cov", "setuptools"]
 
 [tool.ruff]
 line-length = 130
-# Enable additional rules including those previously covered by isort
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -56,4 +51,3 @@ select = [
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-

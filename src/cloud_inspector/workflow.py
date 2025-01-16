@@ -7,20 +7,20 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 # Third-party imports
 import autopep8
-from pyflakes.api import check
-from pyflakes.reporter import Reporter
 from autoflake import fix_code
 from black import FileMode, format_str
 from langchain_core.messages.base import BaseMessage
 from langchain_core.tracers.context import collect_runs
+from pyflakes.api import check
+from pyflakes.reporter import Reporter
 
 # Local imports
 from cloud_inspector.prompts import PromptManager
-from langchain_components.models import ModelRegistry, ModelCapability
+from langchain_components.models import ModelCapability, ModelRegistry
 from langchain_components.templates import GeneratedFiles
 
 
@@ -35,7 +35,7 @@ class WorkflowResult:
     success: bool
     run_id: Optional[str] = None
     error: Optional[str] = None
-    generated_files: Dict[str, str] = None
+    generated_files: dict[str, str] = None
 
 
 # Constants for token limit detection
@@ -77,9 +77,9 @@ class CodeGenerationWorkflow:
     def _handle_token_limit_response(
         self,
         structured_model: Any,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         initial_response: str,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Handle responses that hit token limits by continuing the conversation."""
         retry_count = 0
         accumulated_response = initial_response
@@ -98,15 +98,9 @@ class CodeGenerationWorkflow:
 
             if continuation.get("parsed") is not None:
                 return {
-                    "main.py": self._reformat_code(
-                        continuation["parsed"].main_py, Code=True
-                    ),
-                    "requirements.txt": self._reformat_code(
-                        continuation["parsed"].requirements_txt
-                    ),
-                    "policy.json": self._reformat_code(
-                        continuation["parsed"].policy_json
-                    ),
+                    "main.py": self._reformat_code(continuation["parsed"].main_py, Code=True),
+                    "requirements.txt": self._reformat_code(continuation["parsed"].requirements_txt),
+                    "policy.json": self._reformat_code(continuation["parsed"].policy_json),
                 }
 
             raw_response = (
@@ -117,28 +111,19 @@ class CodeGenerationWorkflow:
             accumulated_response += f"\n{raw_response}"
 
             # Check if this is still a token limit issue
-            if not any(
-                marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS
-            ):
-                raise ParseError(
-                    f"Failed to parse response after continuation: {raw_response}"
-                )
+            if not any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
+                raise ParseError(f"Failed to parse response after continuation: {raw_response}")
 
             retry_count += 1
 
         raise TokenLimitError(
-            f"Failed to get complete response after {MAX_RETRIES} retries.\n"
-            f"Accumulated response: {accumulated_response}"
+            f"Failed to get complete response after {MAX_RETRIES} retries.\nAccumulated response: {accumulated_response}"
         )
 
-    def _extract_latest_generated_files(
-        self, raw_response: Union[str, List[dict]]
-    ) -> Dict[str, str]:
+    def _extract_latest_generated_files(self, raw_response: Union[str, list[dict]]) -> dict[str, str]:
         """Extract latest GeneratedFiles content from Nova model response."""
         # Parse response if string
-        messages = (
-            json.loads(raw_response) if isinstance(raw_response, str) else raw_response
-        )
+        messages = json.loads(raw_response) if isinstance(raw_response, str) else raw_response
         # Track latest content
         latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
         # Scan all messages, overriding with latest content
@@ -153,20 +138,14 @@ class CodeGenerationWorkflow:
             raise ParseError("No GeneratedFiles content found")
         return latest_files
 
-    def execute(
-        self, prompt_name: str, model_name: str, variables: Dict[str, Any]
-    ) -> tuple[WorkflowResult, Path]:
+    def execute(self, prompt_name: str, model_name: str, variables: dict[str, Any]) -> tuple[WorkflowResult, Path]:
         """Execute the code generation workflow."""
         start_time = datetime.now()
 
         try:
             # Validate model can generate code
-            if not self.model_registry.validate_model_capability(
-                model_name, ModelCapability.CODE_GENERATION
-            ):
-                raise ValueError(
-                    f"Model '{model_name}' does not support code generation"
-                )
+            if not self.model_registry.validate_model_capability(model_name, ModelCapability.CODE_GENERATION):
+                raise ValueError(f"Model '{model_name}' does not support code generation")
 
             with collect_runs() as runs_cb:
                 run_name = f"code_generation_{prompt_name}"
@@ -187,19 +166,11 @@ class CodeGenerationWorkflow:
                 model = self.model_registry.get_model(model_name)
                 model = model.with_config({"run_name": run_name, "tags": tags})
 
-                structured_output_params = (
-                    self.model_registry.get_structured_output_params(
-                        model_name, GeneratedFiles
-                    )
-                )
+                structured_output_params = self.model_registry.get_structured_output_params(model_name, GeneratedFiles)
                 if not structured_output_params.get("include_raw"):
-                    raise ValueError(
-                        "include_raw must be True in model definition for token limit handling"
-                    )
+                    raise ValueError("include_raw must be True in model definition for token limit handling")
 
-                structured_model = model.with_structured_output(
-                    GeneratedFiles, **structured_output_params
-                )
+                structured_model = model.with_structured_output(GeneratedFiles, **structured_output_params)
 
                 response = structured_model.invoke(messages)
                 if not isinstance(response, dict):
@@ -207,12 +178,8 @@ class CodeGenerationWorkflow:
 
                 if response.get("parsed") is not None:
                     generated_files = {
-                        "main.py": self._reformat_code(
-                            response["parsed"].main_py, code=True
-                        ),
-                        "requirements.txt": self._reformat_code(
-                            response["parsed"].requirements_txt
-                        ),
+                        "main.py": self._reformat_code(response["parsed"].main_py, code=True),
+                        "requirements.txt": self._reformat_code(response["parsed"].requirements_txt),
                         "policy.json": (
                             response["parsed"].policy_json
                             if isinstance(response["parsed"].policy_json, dict)
@@ -227,12 +194,8 @@ class CodeGenerationWorkflow:
                     )
                     latest_files = self._extract_latest_generated_files(raw_response)
                     generated_files = {
-                        "main.py": self._reformat_code(
-                            latest_files["main_py"], code=True
-                        ),
-                        "requirements.txt": self._reformat_code(
-                            latest_files["requirements_txt"]
-                        ),
+                        "main.py": self._reformat_code(latest_files["main_py"], code=True),
+                        "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
                         "policy.json": (
                             latest_files["policy_json"]
                             if isinstance(latest_files["policy_json"], dict)
@@ -268,9 +231,7 @@ class CodeGenerationWorkflow:
 
     def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
-        decoded = bytes(
-            model_response.encode("utf-8").decode("unicode-escape").encode("utf-8")
-        ).decode("utf-8")
+        decoded = bytes(model_response.encode("utf-8").decode("unicode-escape").encode("utf-8")).decode("utf-8")
 
         # Only process Python files
         if not code:
@@ -373,8 +334,8 @@ class WorkflowManager:
         model_name: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
-        """List workflow results with optional filtering."""
+    ) -> list[dict[str, Any]]:
+        """list workflow results with optional filtering."""
         results = []
 
         # Look for metadata files
@@ -401,7 +362,7 @@ class WorkflowManager:
 
         return sorted(results, key=lambda x: x["timestamp"], reverse=True)
 
-    def get_result(self, prompt_name: str, timestamp: str) -> Optional[Dict[str, Any]]:
+    def get_result(self, prompt_name: str, timestamp: str) -> Optional[dict[str, Any]]:
         """Get a specific workflow result."""
         for meta_file in self.output_dir.glob(f"{prompt_name}_*_{timestamp}_meta.json"):
             try:
@@ -411,7 +372,7 @@ class WorkflowManager:
                 continue
         return None
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get execution statistics."""
         results = self.list_results()
 
@@ -419,11 +380,7 @@ class WorkflowManager:
             "total_executions": len(results),
             "successful_executions": sum(1 for r in results if r["success"]),
             "failed_executions": sum(1 for r in results if not r["success"]),
-            "average_execution_time": (
-                sum(r["execution_time"] for r in results) / len(results)
-                if results
-                else 0
-            ),
+            "average_execution_time": (sum(r["execution_time"] for r in results) / len(results) if results else 0),
             "by_model": {},
             "by_prompt": {},
             "common_errors": {},
@@ -450,8 +407,6 @@ class WorkflowManager:
             # Error tracking
             if not result["success"] and result["error"]:
                 error_type = result["error"].split(":")[0]
-                stats["common_errors"][error_type] = (
-                    stats["common_errors"].get(error_type, 0) + 1
-                )
+                stats["common_errors"][error_type] = stats["common_errors"].get(error_type, 0) + 1
 
         return stats

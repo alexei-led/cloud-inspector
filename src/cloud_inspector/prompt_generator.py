@@ -1,12 +1,14 @@
-from pathlib import Path
 import re
-from typing import Optional, Tuple
 from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+import yaml
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
-from langchain_components.models import ModelRegistry, ModelCapability
-import yaml
+
 from cloud_inspector.prompts import CloudProvider, PromptType
+from langchain_components.models import ModelCapability, ModelRegistry
 
 
 class GeneratedPrompt(BaseModel):
@@ -27,9 +29,7 @@ class GeneratedPrompt(BaseModel):
 class PromptGenerator:
     """Generates prompts for cloud service operations."""
 
-    def __init__(
-        self, model_registry: ModelRegistry, output_dir: Optional[Path] = None
-    ):
+    def __init__(self, model_registry: ModelRegistry, output_dir: Optional[Path] = None):
         self.model_registry = model_registry
         self.output_dir = output_dir or Path("generated_prompts")
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -41,13 +41,11 @@ class PromptGenerator:
         request: str,
         cloud: CloudProvider = CloudProvider.AWS,
         **kwargs,
-    ) -> Tuple[GeneratedPrompt, Path]:
+    ) -> tuple[GeneratedPrompt, Path]:
         """Generate a prompt template from a natural language request."""
 
         # Validate model can generate prompts
-        if not self.model_registry.validate_model_capability(
-            model_name, ModelCapability.PROMPT_GENERATION
-        ):
+        if not self.model_registry.validate_model_capability(model_name, ModelCapability.PROMPT_GENERATION):
             raise ValueError(f"Model '{model_name}' does not support prompt generation")
 
         # Get the model and its config
@@ -55,9 +53,7 @@ class PromptGenerator:
         model_config = self.model_registry.models.get(model_name)
 
         # remove response_format from kwargs
-        model.model_kwargs = {
-            k: v for k, v in model.model_kwargs.items() if k != "response_format"
-        }
+        model.model_kwargs = {k: v for k, v in model.model_kwargs.items() if k != "response_format"}
 
         if not model_config:
             raise ValueError(f"Model config not found for '{model_name}'")
@@ -166,9 +162,7 @@ Focus on:
         """Parse the model response into a GeneratedPrompt structure."""
         try:
             # Extract content from the response
-            content = (
-                response.content if hasattr(response, "content") else str(response)
-            )
+            content = response.content if hasattr(response, "content") else str(response)
 
             # Remove yaml code block markers if present
             content = content.replace("```yaml", "").replace("```", "").strip()
@@ -182,7 +176,7 @@ Focus on:
             variables = data.get("variables", [])
 
             # Extract all {{variable}} patterns from description and template
-            variable_pattern = r'\$\{([^}]+)\}'
+            variable_pattern = r"\$\{([^}]+)\}"
             used_variables = set(re.findall(variable_pattern, description + template))
 
             # Validate all used variables are defined
@@ -205,7 +199,7 @@ Focus on:
                 generated_at=datetime.now().isoformat(),
             )
         except Exception as e:
-            raise ValueError(f"Failed to parse model response: {e}")
+            raise ValueError(f"Failed to parse model response: {e}") from e
 
     def _save_prompt(self, model_name: str, prompt: GeneratedPrompt) -> Path:
         """Save the generated prompt to a YAML file."""

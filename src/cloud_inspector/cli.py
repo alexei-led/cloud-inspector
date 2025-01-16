@@ -237,7 +237,7 @@ def list_models(ctx: click.Context):
         return
 
     # Find the longest name for alignment
-    max_name_length = max(len(name) for name in models.keys())
+    max_name_length = max(len(name) for name in models)
 
     click.echo("\nAvailable Models:")
     click.echo("=" * (max_name_length + 40))

@@ -1,16 +1,25 @@
-# Environment variables
+### Environment Variables ###
 .env
 .env.*
 !.env.example
 
-# Python
+### Python ###
+# Byte-compiled files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+
+# Distribution / Packaging
 .Python
 build/
-pkg/
 develop-eggs/
 dist/
 downloads/
@@ -24,27 +33,23 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
-*.egg
 
-# Virtual Environment
-.venv
-venv/
-ENV/
-
-# IDE
+### IDEs ###
 .idea/
 .vscode/
+
+### Temporary Files ###
 *.swp
 *.swo
 *~
 
-# Testing
+### Testing ###
 .coverage
 htmlcov/
 
-# Caches
-.pytest_cache/
+### Caches ###
 .mypy_cache/
+.pytest_cache/
 .ruff_cache/
 
 # Project specific
@@ -70,4 +75,4 @@ logs/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
