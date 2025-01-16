@@ -38,6 +38,9 @@ wheels/
 .idea/
 .vscode/
 
+### Go ###
+pkg/
+
 ### Temporary Files ###
 *.swp
 *.swo
@@ -48,7 +51,6 @@ wheels/
 htmlcov/
 
 ### Caches ###
-.mypy_cache/
 .pytest_cache/
 .ruff_cache/
 

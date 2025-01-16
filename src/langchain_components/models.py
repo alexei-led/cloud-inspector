@@ -85,7 +85,7 @@ class ProviderStrategy(ABC):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> BaseLanguageModel[Any]:
         """Create a model instance for this provider."""
         pass
 
@@ -96,7 +96,7 @@ class ProviderStrategy(ABC):
 
     def _get_common_params(self, common: CommonModelParams) -> dict[str, Any]:
         """Get common parameters supported by all LangChain chat models."""
-        params = {
+        params: dict[str, Any] = {
             "model": common.model_id,
             "max_tokens": common.max_tokens,
         }
@@ -116,9 +116,9 @@ class OpenAIStrategy(ProviderStrategy):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> ChatOpenAI:
         params = self._get_common_params(model_config.common)
-        model_kwargs = {}
+        model_kwargs: dict[str, Any] = {}
 
         if model_config.openai and model_config.openai.response_format:
             model_kwargs["response_format"] = model_config.openai.response_format
@@ -142,7 +142,7 @@ class AnthropicStrategy(ProviderStrategy):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> ChatAnthropic:
         params = self._get_common_params(model_config.common)
         api_key = os.getenv(provider_config.api_key_env or "") or ""
         return ChatAnthropic(
@@ -159,7 +159,7 @@ class GoogleStrategy(ProviderStrategy):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> ChatGoogleGenerativeAI:
         params = self._get_common_params(model_config.common)
         api_key = os.getenv(provider_config.api_key_env or "")
         if model_config.google:
@@ -179,7 +179,7 @@ class OllamaStrategy(ProviderStrategy):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> ChatOllama:
         params = self._get_common_params(model_config.common)
         if model_config.ollama and model_config.ollama.repeat_penalty is not None:
             params["repeat_penalty"] = model_config.ollama.repeat_penalty
@@ -196,7 +196,7 @@ class BedrockStrategy(ProviderStrategy):
         self,
         model_config: ModelConfig,
         provider_config: ProviderConfig,
-    ) -> BaseLanguageModel:
+    ) -> ChatBedrock:
         params = self._get_common_params(model_config.common)
         return ChatBedrock(
             region=os.getenv(provider_config.region_env or "", provider_config.default_region),
@@ -285,7 +285,7 @@ class ModelRegistry:
         for provider, provider_data in config["provider_configs"].items():
             self.provider_configs[provider] = ProviderConfig(**provider_data)
 
-    def get_model(self, name: str) -> BaseLanguageModel:
+    def get_model(self, name: str) -> BaseLanguageModel[Any]:
         """Get a model instance by name."""
         if name not in self.models:
             raise ValueError(f"Model '{name}' not found in configuration")
