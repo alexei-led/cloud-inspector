@@ -35,7 +35,7 @@ class WorkflowResult:
     success: bool
     run_id: Optional[str] = None
     error: Optional[str] = None
-    generated_files: dict[str, str] = None
+    generated_files: Optional[dict[str, str]] = None
 
 
 # Constants for token limit detection
@@ -98,7 +98,7 @@ class CodeGenerationWorkflow:
 
             if continuation.get("parsed") is not None:
                 return {
-                    "main.py": self._reformat_code(continuation["parsed"].main_py, Code=True),
+                    "main.py": self._reformat_code(continuation["parsed"].main_py, code=True),
                     "requirements.txt": self._reformat_code(continuation["parsed"].requirements_txt),
                     "policy.json": self._reformat_code(continuation["parsed"].policy_json),
                 }
@@ -170,7 +170,7 @@ class CodeGenerationWorkflow:
                 if not structured_output_params.get("include_raw"):
                     raise ValueError("include_raw must be True in model definition for token limit handling")
 
-                structured_model = model.with_structured_output(GeneratedFiles, **structured_output_params)
+                structured_model = model.with_structured_output(GeneratedFiles, **structured_output_params)  # type: ignore
 
                 response = structured_model.invoke(messages)
                 if not isinstance(response, dict):

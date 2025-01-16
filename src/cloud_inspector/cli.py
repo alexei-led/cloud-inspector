@@ -10,7 +10,7 @@ import click
 from tabulate import tabulate
 
 from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import PromptManager
+from cloud_inspector.prompts import CloudProvider, PromptManager
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
@@ -256,7 +256,7 @@ def list_models(ctx: click.Context):
 def generate_prompt(ctx: click.Context, cloud: str, service: str, request: str, model: str):
     """Generate a new prompt template from a request."""
     generator = PromptGenerator(ctx.obj["registry"])
-    result, saved_path = generator.generate_prompt(model, service, request, cloud=cloud)
+    result, saved_path = generator.generate_prompt(model, service, request, CloudProvider(cloud))
 
     # Display the generated prompt
     click.echo("\nGenerated Prompt:")

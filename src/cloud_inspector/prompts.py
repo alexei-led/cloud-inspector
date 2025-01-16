@@ -273,7 +273,7 @@ class PromptManager:
 
     def validate_prompt_file(self, file_path: Path) -> list[str]:
         """Validate a prompt file format and content."""
-        errors = []
+        errors = list[str]()
         try:
             with file_path.open("r") as f:
                 data = yaml.safe_load(f)
@@ -286,7 +286,7 @@ class PromptManager:
                 errors.append("Missing 'prompts' key in root")
                 return errors
 
-            prompts = data["prompts"]
+            prompts: dict[str, Any] = data["prompts"]
             if not isinstance(prompts, dict):
                 errors.append("'prompts' must be a dictionary")
                 return errors

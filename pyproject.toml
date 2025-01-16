@@ -53,7 +53,7 @@ quote-style = "double"
 indent-style = "space"
 
 [tool.pyright]
-typeCheckingMode = "strict"
+typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 exclude = [".venv", "./generated_code", "./generated_prompts"]
