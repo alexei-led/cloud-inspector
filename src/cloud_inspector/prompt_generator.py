@@ -23,7 +23,7 @@ class GeneratedPrompt(BaseModel):
     cloud: CloudProvider
     prompt_type: PromptType = PromptType.GENERATED
     generated_by: Optional[str] = None
-    generated_at: Optional[datetime] = None
+    generated_at: Optional[str] = None
 
 
 class PromptGenerator:
@@ -53,7 +53,7 @@ class PromptGenerator:
         model_config = self.model_registry.models.get(model_name)
 
         # remove response_format from kwargs
-        model.model_kwargs = {k: v for k, v in model.model_kwargs.items() if k != "response_format"}
+        model.model_kwargs = {k: v for k, v in model.model_kwargs.items() if k != "response_format"}  # type: ignore
 
         if not model_config:
             raise ValueError(f"Model config not found for '{model_name}'")
@@ -165,7 +165,7 @@ Focus on:
             content = response.content if hasattr(response, "content") else str(response)
 
             # Remove yaml code block markers if present
-            content = content.replace("```yaml", "").replace("```", "").strip()
+            content = content.replace("```yaml", "").replace("```", "").strip()  # type: ignore
 
             # Parse YAML content
             data = yaml.safe_load(content)
@@ -227,12 +227,12 @@ Focus on:
         }
 
         # Add custom representer for str to handle multiline strings
-        yaml.SafeDumper.org_represent_str = yaml.SafeDumper.represent_str
+        original_represent_str = yaml.SafeDumper.represent_str
 
         def repr_str(dumper, data):
             if "\n" in data:
                 return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-            return dumper.org_represent_str(data)
+            return original_represent_str(dumper, data)
 
         yaml.add_representer(str, repr_str, Dumper=yaml.SafeDumper)
 

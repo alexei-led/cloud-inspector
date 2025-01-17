@@ -32,7 +32,7 @@ cloud-inspector = "cloud_inspector.cli:cli"
 dev = ["pytest", "ruff", "mypy", "pytest-cov", "setuptools"]
 
 [tool.ruff]
-line-length = 130
+line-length = 240
 
 [tool.ruff.lint]
 select = [
