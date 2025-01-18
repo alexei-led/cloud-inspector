@@ -9,6 +9,9 @@ description = "A tool for comparing LLM code generation capabilities for cloud i
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "autopep8",
+    "autoflake",
+    "black",
     "boto3",
     "click",
     "langchain",

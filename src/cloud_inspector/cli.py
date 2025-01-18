@@ -252,11 +252,37 @@ def list_models(ctx: click.Context):
 @click.option("--service", required=True, help="Service name within the cloud provider")
 @click.option("--request", required=True, help="Description of the prompt to generate")
 @click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
+@click.option("--discovered-data", type=click.Path(exists=True, dir_okay=False), help="Path to JSON file containing previously discovered data")
+@click.option("--iteration", type=int, default=1, help="Current iteration number")
+@click.option("--parent-request-id", help="ID of the original user request")
 @click.pass_context
-def generate_prompt(ctx: click.Context, cloud: str, service: str, request: str, model: str):
+def generate_prompt(
+    ctx: click.Context,
+    cloud: str,
+    service: str,
+    request: str,
+    model: str,
+    discovered_data: Optional[str],
+    iteration: int,
+    parent_request_id: Optional[str],
+):
     """Generate a new prompt template from a request."""
+    # Load discovered data from JSON file if provided
+    discovered_data_dict = None
+    if discovered_data:
+        with open(discovered_data) as f:
+            discovered_data_dict = json.load(f)
+
     generator = PromptGenerator(ctx.obj["registry"])
-    result, saved_path = generator.generate_prompt(model, service, request, CloudProvider(cloud))
+    result, saved_path = generator.generate_prompt(
+        model,
+        service,
+        request,
+        discovered_data=discovered_data_dict,
+        iteration=iteration,
+        parent_request_id=parent_request_id,
+        cloud=CloudProvider(cloud),
+    )
 
     # Display the generated prompt
     click.echo("\nGenerated Prompt:")

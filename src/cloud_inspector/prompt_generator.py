@@ -12,8 +12,9 @@ from langchain_components.models import ModelCapability, ModelRegistry
 
 
 class GeneratedPrompt(BaseModel):
-    """Structure for generated prompt."""
+    """Structure for generated prompt with discovery tracking capabilities."""
 
+    # Core prompt fields
     service: str
     operation: str
     description: str
@@ -22,8 +23,18 @@ class GeneratedPrompt(BaseModel):
     tags: list[str]
     cloud: CloudProvider
     prompt_type: PromptType = PromptType.GENERATED
+
+    # Discovery tracking
+    discovered_resources: list[dict] = []  # List of resources discovered by this prompt
+    dependencies: list[str] = []  # List of resource IDs this prompt depends on
+    next_discovery_targets: list[str] = []  # Suggested next resources to discover
+    discovery_complete: bool = False  # True if no more discoveries needed for this context
+
+    # Metadata
     generated_by: Optional[str] = None
     generated_at: Optional[str] = None
+    iteration: int = 1  # Track which iteration this prompt belongs to
+    parent_request_id: Optional[str] = None  # Link to original user request
 
 
 class PromptGenerator:
@@ -39,10 +50,23 @@ class PromptGenerator:
         model_name: str,
         service: str,
         request: str,
+        discovered_data: Optional[dict] = None,
+        iteration: int = 1,
+        parent_request_id: Optional[str] = None,
         cloud: CloudProvider = CloudProvider.AWS,
         **kwargs,
     ) -> tuple[GeneratedPrompt, Path]:
-        """Generate a prompt template from a natural language request."""
+        """Generate a prompt template from a natural language request
+        Args:
+            model_name: Name of the model to use
+            service: Cloud service to interact with
+            request: Original user request
+            discovered_data: Previously discovered information (optional)
+            iteration: Current iteration number
+            parent_request_id: ID of the original user request
+            cloud: Cloud provider to use
+            **kwargs: Additional model-specific arguments
+        """
 
         # Validate model can generate prompts
         if not self.model_registry.validate_model_capability(model_name, ModelCapability.PROMPT_GENERATION):
@@ -58,75 +82,98 @@ class PromptGenerator:
         if not model_config:
             raise ValueError(f"Model config not found for '{model_name}'")
 
+        # Create discovery context from previously discovered data
+        discovery_context = ""
+        if discovered_data:
+            discovery_context = "Previously Discovered Information:\n"
+            for resource_type, data in discovered_data.items():
+                discovery_context += f"- {resource_type}:\n"
+                if isinstance(data, list):
+                    for item in data:
+                        discovery_context += f"  - {str(item)}\n"
+                else:
+                    discovery_context += f"  {str(data)}\n"
+
         # Create the system message
         system_message = f"""
-Act as a professional {cloud} Python DevOps engineer.
-Your task is to inspect the customer request and generate a prompt that will:
-1. Use provided information without making assumptions
-2. Include code logic to discover missing but required information
-3. Handle multiple possible configurations/services
+Act as a professional {cloud} Python DevOps engineer specializing in troubleshooting and discovery.
+Your task is to generate the NEXT most relevant prompt for discovering cloud resources and their state.
+
+Context Awareness:
+1. Consider already discovered information (if any) before suggesting next steps
+2. Follow logical troubleshooting progression (e.g., for connectivity: instance → security groups → VPC → routing)
+3. Focus on ONE specific discovery task at a time - don't try to discover everything at once
+
+Discovery Priorities:
+1. Core Configuration - Essential resource settings and state
+2. Related Resources - Directly connected or dependent resources
+3. Recent Changes - Audit logs showing relevant modifications
+4. Performance Data - Key metrics indicating resource health
+5. Operational Logs - Detailed logs for troubleshooting
 
 IMPORTANT: Always use ${{variable_name}} syntax for variables in description and template sections.
 Example: "Investigate ${{bucket_name}} in ${{region}}" (NOT using {{variable_name}})
 
 Variable Handling Rules:
-1. Only create variables for explicitly provided values in the request (IDs, names, ARNs, regions, zones) or those that are needed but cannot be discovered
+1. Only create variables for explicitly provided values or those that cannot be discovered
 2. For missing but required information, include discovery logic in the template
-2. Replace values with ${{variable_name}} format in description and template
-3. Do NOT include variables for cloud credentials (handled by runtime environment)
-4. Define all required variables in the variables section
+3. Replace values with ${{variable_name}} format in description and template
+4. Do NOT include variables for cloud credentials (handled by runtime)
 
 The prompt should help generate code that:
-1. Uses {cloud} API (Python) to fetch all relevant configuration, logs, and monitoring data
-2. Produces correct, working, production-ready Python code that can be executed directly
+1. Uses {cloud} API (Python) to fetch specific data points
+2. Produces correct, working, production-ready Python code
 3. Follows best practices for error handling and logging
-4. Returns data in a structured JSON format for easy analysis
+4. Returns data in a structured JSON format for analysis
 
-The generated prompt should follow this structure (YAML format):
+The generated prompt must follow this structure (YAML format):
 service: The {cloud} service (e.g., ec2, s3)
-operation: Type of operation (e.g., troubleshoot, analyze)
-description: Clear description using {{variable_name}} syntax for known variables
+operation: Type of operation (e.g., discover_config, fetch_logs)
+description: Clear description using ${{variable_name}} syntax for variables
 template: |
-  A clear, concise list of requirements using {{variable_name}} syntax:
+  A clear, focused list of requirements:
   1. Core Functionality
-     - First list steps to discover missing information
-     - Then list steps to analyze the discovered configuration
+     - List specific data points to collect
      - Use ${{variable_name}} syntax for variables
      - Use cloud API calls to fetch data
-     - Collect all relevant data for analysis
   2. Error Handling & Logging
-     - Handle errors for each discovery and analysis step
+     - Handle API errors gracefully
      - Log all discovered information
   3. Output Format
-     - JSON structure showing both discovered and analyzed information
+     - JSON structure for discovered information
 variables:
-  - name: variable_name # Without ${{ }} syntax in name
-    description: Clear description of what this variable represents and any constraints
-  # Add all required inputs specific to this service and operation
-  # Example:
-  # - name: instance_id
-  #   description: ID of the instance to analyze
-  # - name: region
-  #   description: Region where the resources are located
-tags: Relevant tags for categorization (as a list)
+  - name: variable_name # Without ${{ }} syntax
+    description: Clear description of the variable
+dependencies: # List of resource IDs this discovery depends on
+  - "resource_id_1"
+  - "resource_id_2"
+next_discovery_targets: # Suggested next resources to investigate
+  - "target_1"
+  - "target_2"
+discovery_complete: false # Set to true if no more discoveries needed for this context
+tags: Relevant tags for categorization
 """
 
         # Create the user message
         user_message = f"""
 Cloud Service: {service}
 Customer Request: {request}
+Iteration: {iteration}
 
-Generate a prompt template for a Python script that will:
-1. Connect to {cloud} {service} service
-2. Collect and analyze relevant data
-3. Return findings in JSON format
+{discovery_context}
 
-Focus on:
-1. Required permissions
-2. Key data points to collect
-3. Success/failure criteria
-4. Output structure
-5. Use of variables (like {{variable}}) for dynamic values in template
+Generate the NEXT most valuable prompt for discovering and analyzing cloud resources.
+The prompt should:
+1. Focus on collecting specific, targeted information from {cloud} {service}
+2. Consider already discovered data when choosing what to investigate next
+3. Follow logical troubleshooting progression
+4. Return findings in structured JSON format
+
+Remember:
+1. Focus on ONE specific discovery task
+2. Include error handling
+3. Use variables for dynamic values
+4. Suggest next discovery targets
 """
 
         # Format messages based on system prompt support
@@ -151,14 +198,14 @@ Focus on:
         response = model.invoke(messages)
 
         # Parse the response into a GeneratedPrompt
-        parsed_prompt = self._parse_response(response)
+        parsed_prompt = self._parse_response(response, iteration=iteration, parent_request_id=parent_request_id)
 
         # Save the generated prompt and get the path
         saved_path = self._save_prompt(model_name, parsed_prompt)
 
         return parsed_prompt, saved_path
 
-    def _parse_response(self, response: BaseMessage) -> GeneratedPrompt:
+    def _parse_response(self, response: BaseMessage, iteration: int = 1, parent_request_id: Optional[str] = None) -> GeneratedPrompt:
         """Parse the model response into a GeneratedPrompt structure."""
         try:
             # Extract content from the response
@@ -197,6 +244,12 @@ Focus on:
                 prompt_type=PromptType.GENERATED,
                 generated_by=data.get("generated_by", "").strip(),
                 generated_at=datetime.now().isoformat(),
+                iteration=iteration,
+                parent_request_id=parent_request_id,
+                discovered_resources=[],
+                dependencies=data.get("dependencies", []),
+                next_discovery_targets=data.get("next_discovery_targets", []),
+                discovery_complete=data.get("discovery_complete", False),
             )
         except Exception as e:
             raise ValueError(f"Failed to parse model response: {e}") from e
@@ -206,7 +259,7 @@ Focus on:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         # Create a unique name for the prompt
-        prompt_name = f"{prompt.service}_{prompt.operation}_{model_name}_{timestamp}"
+        prompt_name = f"{prompt.service}_{prompt.operation}_{model_name}_{prompt.iteration}_{timestamp}"
         filename = f"prompt_{prompt_name}.yaml"
 
         prompt_data = {
@@ -221,7 +274,13 @@ Focus on:
                     "cloud": prompt.cloud.value,
                     "prompt_type": "generated",
                     "generated_by": model_name,
-                    "generated_at": datetime.now().isoformat(),
+                    "generated_at": prompt.generated_at,
+                    "iteration": prompt.iteration,
+                    "parent_request_id": prompt.parent_request_id,
+                    "discovered_resources": prompt.discovered_resources,
+                    "dependencies": prompt.dependencies,
+                    "next_discovery_targets": prompt.next_discovery_targets,
+                    "discovery_complete": prompt.discovery_complete,
                 }
             }
         }
