@@ -14,6 +14,13 @@ from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
+
+
 def setup_logging(log_level: str) -> None:
     """Set up logging configuration."""
     numeric_level = getattr(logging, log_level.upper(), None)
@@ -111,7 +118,7 @@ def list_prompts(
         return
 
     if format == "json":
-        click.echo(json.dumps({k: v.model_dump() for k, v in prompts.items()}, indent=2))
+        click.echo(json.dumps({k: v.model_dump() for k, v in prompts.items()}, indent=2, cls=DateTimeEncoder))
         return
 
     # Table format
