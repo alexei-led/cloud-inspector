@@ -125,6 +125,12 @@ class PromptTemplate(BaseModel):
     )
     generated_by: Optional[str] = Field(None, description="Model used to generate the prompt")
     generated_at: Optional[datetime] = Field(None, description="Timestamp when the prompt was generated")
+    discovered_resources: list[str] = Field(default_factory=list, description="List of discovered resources")
+    dependencies: list[str] = Field(default_factory=list, description="List of dependencies")
+    next_discovery_targets: list[str] = Field(default_factory=list, description="List of next discovery targets")
+    discovery_complete: bool = Field(default=False, description="Whether discovery is complete")
+    iteration: int = Field(default=1, description="Current iteration")
+    parent_request_id: Optional[str] = Field(None, description="Parent request ID")
 
     def format_messages(self, variables: dict[str, Any], supports_system_prompt: bool = True) -> list[Any]:
         """Format the prompt into chat messages."""
@@ -135,9 +141,7 @@ class PromptTemplate(BaseModel):
 
         if missing_vars:
             var_descriptions = {var["name"]: var["description"] for var in self.variables if var["name"] in missing_vars}
-            raise ValueError(
-                f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}"
-            )
+            raise ValueError(f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}")
 
         if supports_system_prompt:
             prompt = ChatPromptTemplate.from_messages(
@@ -187,6 +191,7 @@ class PromptManager:
                         # set prompt_type for predefined prompts
                         for prompt in collection.prompts.values():
                             prompt.prompt_type = PromptType.PREDEFINED
+                            prompt.discovery_complete = True  # Predefined prompts are always complete
                         self.prompts.update(collection.prompts)
                 except Exception as e:
                     print(f"Error loading prompts from {file}: {e}")
@@ -197,51 +202,63 @@ class PromptManager:
                 try:
                     with file.open("r") as f:
                         data = yaml.safe_load(f)
-                        collection = PromptCollection(prompts=data.get("prompts", {}))
-                        # Extract metadata from filename
-                        # Format: prompt_service_operation_model_YYYYMMDD_HHMMSS.yaml
-                        parts = file.stem.split("_")
-                        if len(parts) >= 6:  # Changed from 5 to 6 to match format
-                            timestamp_str = f"{parts[-2]}_{parts[-1]}"  # Combine date and time parts
-                            timestamp = datetime.strptime(timestamp_str, "%Y%m%d_%H%M%S")
-                            model = parts[-3]  # Model is now third from last
-                            for prompt in collection.prompts.values():
-                                prompt.prompt_type = PromptType.GENERATED
-                                prompt.generated_by = model
-                                prompt.generated_at = timestamp
-                        self.prompts.update(collection.prompts)
+                        prompts_data = data.get("prompts", {})
+                        for name, prompt_data in prompts_data.items():
+                            # Handle discovery-related fields with defaults if not present
+                            prompt_data.setdefault("discovered_resources", [])
+                            prompt_data.setdefault("dependencies", [])
+                            prompt_data.setdefault("next_discovery_targets", [])
+                            prompt_data.setdefault("discovery_complete", False)
+                            prompt_data.setdefault("iteration", 1)
+                            prompt_data.setdefault("parent_request_id", None)
+                            
+                            prompt = PromptTemplate(**prompt_data)
+                            self.prompts[name] = prompt
                 except Exception as e:
                     print(f"Error loading generated prompts from {file}: {e}")
+
+    def save_prompt(self, name: str, prompt: PromptTemplate) -> None:
+        """Save a prompt to the appropriate directory."""
+        target_dir = self.prompt_dir if prompt.prompt_type == PromptType.PREDEFINED else self.generated_prompt_dir
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        file_path = target_dir / f"{name}.yaml"
+
+        # Prepare data for saving
+        data = prompt.model_dump()
+
+        # Add discovery-related fields for generated prompts
+        if prompt.prompt_type == PromptType.GENERATED:
+            data.update(
+                {
+                    "discovered_resources": getattr(prompt, "discovered_resources", []),
+                    "dependencies": getattr(prompt, "dependencies", []),
+                    "next_discovery_targets": getattr(prompt, "next_discovery_targets", []),
+                    "discovery_complete": getattr(prompt, "discovery_complete", False),
+                    "iteration": getattr(prompt, "iteration", 1),
+                    "parent_request_id": getattr(prompt, "parent_request_id", None),
+                }
+            )
+
+        # Save to file
+        with file_path.open("w") as f:
+            yaml.safe_dump(data, f, sort_keys=False, width=120)
 
     def get_prompt(self, name: str) -> Optional[PromptTemplate]:
         """Get a prompt template by name."""
         return self.prompts.get(name)
 
-    def list_prompts(self) -> list[dict[str, Any]]:
+    def list_prompts(self) -> dict[str, PromptTemplate]:
         """list all available prompts with their details."""
-        return [
-            {
-                "name": name,
-                "service": prompt.service,
-                "operation": prompt.operation,
-                "description": prompt.description,
-                "variables": prompt.variables,
-                "tags": prompt.tags,
-                "cloud": prompt.cloud,
-                "prompt_type": prompt.prompt_type,
-                "generated_by": prompt.generated_by,
-                "generated_at": (prompt.generated_at.isoformat() if prompt.generated_at else None),
-            }
-            for name, prompt in self.prompts.items()
-        ]
+        return self.prompts
 
     def get_prompts_by_service(self, service: str) -> list[str]:
         """Get all prompt names for a specific service."""
-        return [name for name, prompt in self.prompts.items() if prompt.service.lower() == service.lower()]
+        return [name for name, prompt in self.prompts.items() if prompt.service == service]
 
     def get_prompts_by_tag(self, tag: str) -> list[str]:
         """Get all prompt names with a specific tag."""
-        return [name for name, prompt in self.prompts.items() if tag.lower() in [t.lower() for t in prompt.tags]]
+        return [name for name, prompt in self.prompts.items() if tag in prompt.tags]
 
     def get_all_services(self) -> set[str]:
         """Get all unique AWS services in the prompts."""
@@ -251,55 +268,49 @@ class PromptManager:
         """Get all unique tags from all prompts."""
         return {tag for prompt in self.prompts.values() for tag in prompt.tags}
 
-    def format_prompt(self, name: str, variables: dict[str, Any], supports_system_prompt: bool = True) -> Optional[list[Any]]:
+    def format_prompt(self, name: str, variables: dict[str, Any], supports_system_prompt: bool = True) -> list[Any]:
         """Format a prompt template with provided variables."""
         prompt = self.get_prompt(name)
         if not prompt:
-            return None
-
-        # Validate all required variables are provided
-        required_var_names = {var["name"] for var in prompt.variables}
-        provided_var_names = set(variables.keys())
-        missing_vars = required_var_names - provided_var_names
-        if missing_vars:
-            raise ValueError(f"Missing required variables: {missing_vars}")
-
-        try:
-            return prompt.format_messages(variables, supports_system_prompt=supports_system_prompt)
-        except KeyError as e:
-            raise ValueError(f"Invalid variable in template: {e}") from e
-        except Exception as e:
-            raise ValueError(f"Error formatting prompt: {e}") from e
+            raise ValueError(f"Prompt '{name}' not found")
+        return prompt.format_messages(variables, supports_system_prompt)
 
     def validate_prompt_file(self, file_path: Path) -> list[str]:
         """Validate a prompt file format and content."""
-        errors = list[str]()
+        errors = []
         try:
             with file_path.open("r") as f:
                 data = yaml.safe_load(f)
 
+            # Validate top-level structure
             if not isinstance(data, dict):
-                errors.append("Root element must be a dictionary")
+                errors.append("File must contain a YAML dictionary")
                 return errors
 
-            if "prompts" not in data:
-                errors.append("Missing 'prompts' key in root")
+            if "prompts" not in data and not any(key in data for key in PromptTemplate.model_fields):
+                errors.append("File must contain either a 'prompts' key or a single prompt definition")
                 return errors
 
-            prompts: dict[str, Any] = data["prompts"]
-            if not isinstance(prompts, dict):
-                errors.append("'prompts' must be a dictionary")
-                return errors
+            # Validate collection of prompts
+            if "prompts" in data:
+                if not isinstance(data["prompts"], dict):
+                    errors.append("'prompts' must be a dictionary")
+                    return errors
 
-            for name, prompt_data in prompts.items():
+                for name, prompt_data in data["prompts"].items():
+                    try:
+                        PromptTemplate(**prompt_data)
+                    except Exception as e:
+                        errors.append(f"Invalid prompt '{name}': {str(e)}")
+
+            # Validate single prompt
+            else:
                 try:
-                    PromptTemplate(**prompt_data)
+                    PromptTemplate(**data)
                 except Exception as e:
-                    errors.append(f"Invalid prompt '{name}': {str(e)}")
+                    errors.append(f"Invalid prompt definition: {str(e)}")
 
-        except yaml.YAMLError as e:
-            errors.append(f"Invalid YAML format: {str(e)}")
         except Exception as e:
-            errors.append(f"Error validating file: {str(e)}")
+            errors.append(f"Error reading file: {str(e)}")
 
         return errors

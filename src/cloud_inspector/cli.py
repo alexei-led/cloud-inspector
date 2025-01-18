@@ -7,10 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from tabulate import tabulate
 
 from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import CloudProvider, PromptManager
+from cloud_inspector.prompts import CloudProvider, PromptManager, PromptType
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
@@ -67,13 +66,15 @@ def prompt():
 
 @prompt.command(name="list")
 @click.option("--tag", help="Filter prompts by tag")
-@click.option("--service", help="Filter prompts by AWS service")
-@click.option("--cloud", help="Filter by cloud provider (aws, gcp, azure)")
-@click.option("--type", "prompt_type", help="Filter by type (predefined, generated)")
+@click.option("--service", help="Filter prompts by service")
+@click.option("--cloud", help="Filter prompts by cloud provider")
+@click.option("--prompt-type", help="Filter prompts by type (predefined/generated)")
+@click.option("--discovery-complete", type=bool, help="Filter prompts by discovery status")
+@click.option("--parent-request", help="Filter prompts by parent request ID")
 @click.option(
     "--format",
-    type=click.Choice(["text", "json", "table"], case_sensitive=False),
-    default="text",
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    default="table",
     help="Output format",
 )
 @click.pass_context
@@ -83,86 +84,74 @@ def list_prompts(
     service: Optional[str],
     cloud: Optional[str],
     prompt_type: Optional[str],
+    discovery_complete: Optional[bool],
+    parent_request: Optional[str],
     format: str,
 ):
-    """List all available prompts. Optionally filter by tag, service, cloud, and type."""
+    """List all available prompts. Optionally filter by various criteria."""
     prompt_manager = ctx.obj["prompt_manager"]
-    available_prompts = prompt_manager.list_prompts()
-
-    if not available_prompts:
-        click.echo("No prompts available.")
-        return
+    prompts = prompt_manager.list_prompts()
 
     # Apply filters
     if tag:
-        available_prompts = [p for p in available_prompts if tag in p["tags"]]
+        prompts = {k: v for k, v in prompts.items() if tag in v.tags}
     if service:
-        available_prompts = [p for p in available_prompts if p["service"] == service]
+        prompts = {k: v for k, v in prompts.items() if v.service == service}
     if cloud:
-        available_prompts = [p for p in available_prompts if p["cloud"] == cloud]
+        prompts = {k: v for k, v in prompts.items() if v.cloud == cloud}
     if prompt_type:
-        available_prompts = [p for p in available_prompts if p["prompt_type"] == prompt_type]
+        prompts = {k: v for k, v in prompts.items() if v.prompt_type == prompt_type}
+    if discovery_complete is not None:
+        prompts = {k: v for k, v in prompts.items() if getattr(v, "discovery_complete", None) == discovery_complete}
+    if parent_request:
+        prompts = {k: v for k, v in prompts.items() if getattr(v, "parent_request_id", None) == parent_request}
 
-    if not available_prompts:
-        click.echo("No prompts found matching the specified filters.")
+    if not prompts:
+        click.echo("No prompts found matching the criteria.")
         return
 
     if format == "json":
-        click.echo(json.dumps(available_prompts, indent=2, default=str))
+        click.echo(json.dumps({k: v.model_dump() for k, v in prompts.items()}, indent=2))
+        return
 
-    elif format == "table":
-        headers = [
-            "Name",
-            "Cloud",
-            "Service",
-            "Operation",
-            "Type",
-            "Source",
-            "Description",
-        ]
-        table_data = [
-            [
-                p["name"],
-                p["cloud"].value,
-                p["service"],
-                p["operation"],
-                "🤖" if p["prompt_type"] == "generated" else "📋",
-                p["generated_by"] or "manual",
-                ((p["description"][:60] + "...") if len(p["description"]) > 60 else p["description"]),
-            ]
-            for p in available_prompts
-        ]
-        click.echo(
-            tabulate(
-                table_data,
-                headers=headers,
-                tablefmt="pretty",
-                colalign=("left", "left", "left", "left", "center", "left", "left"),
-            )
-        )
+    # Table format
+    headers = ["Name", "Service", "Operation", "Type", "Discovery", "Parent Request"]
 
-    else:  # text format
-        max_name_length = max(len(p["name"]) for p in available_prompts)
-        max_source_length = max(len(p["generated_by"] or "manual") for p in available_prompts)
+    # Emoji mapping for prompt types
+    PROMPT_TYPE_EMOJI = {"predefined": "📝", "generated": "🤖", None: "-"}
 
-        click.echo("\nAvailable Prompts:")
-        click.echo("=" * (max_name_length + 60))
+    rows = []
+    for name, prompt in prompts.items():
+        discovery_status = getattr(prompt, "discovery_complete", None)
+        discovery_str = "✓" if discovery_status else "..." if discovery_status is False else "-"
+        parent_req = getattr(prompt, "parent_request_id", "-")
+        service = prompt.service if prompt.service is not None else "-"
+        operation = prompt.operation if prompt.operation is not None else "-"
+        prompt_type = PROMPT_TYPE_EMOJI.get(prompt.prompt_type, "-")
+        parent_req_display = parent_req[:8] + "..." if parent_req and parent_req != "-" and len(parent_req) > 8 else parent_req
+        rows.append([name, service, operation, prompt_type, discovery_str, parent_req_display])
 
-        for prompt in available_prompts:
-            type_icon = "🤖" if prompt["prompt_type"] == "generated" else "📋"
-            source = prompt["generated_by"] or "manual"
-            description = prompt["description"]
-            if len(description) > 60:
-                description = description[:60] + "..."
+    # Sort rows by name
+    rows.sort(key=lambda x: x[0])
 
-            formatted_line = (
-                f"{prompt['name']:<{max_name_length}} "
-                f"{type_icon} "
-                f"[{prompt['cloud'].value}] "
-                f"[{source:<{max_source_length}}]    "
-                f"{description}"
-            )
-            click.echo(formatted_line)
+    # Print table
+    click.echo("\nAvailable Prompts:")
+    click.echo("=" * 120)
+
+    # Calculate column widths
+    widths = [max(len(str(row[i])) for row in [headers] + rows) for i in range(len(headers))]
+
+    # Print headers
+    header_format = "  ".join(f"{{:<{w}}}" for w in widths)
+    click.echo(header_format.format(*headers))
+    click.echo("-" * 120)
+
+    # Print rows
+    row_format = "  ".join(f"{{:<{w}}}" for w in widths)
+    for row in rows:
+        # Replace None with "-" during formatting
+        formatted_row = ["-" if x is None else x for x in row]
+        click.echo(row_format.format(*formatted_row))
 
 
 @prompt.command()
@@ -178,25 +167,52 @@ def show(ctx: click.Context, name: str):
         return
 
     click.echo("\nPrompt Details:")
-    click.echo("=" * 80)
+    click.echo("=" * 40)
     click.echo(f"Name: {name}")
-    click.echo(f"Cloud: {prompt.cloud}")
     click.echo(f"Service: {prompt.service}")
     click.echo(f"Operation: {prompt.operation}")
-    click.echo(f"Description: {prompt.description}")
-    click.echo(f"Type: {'Generated' if prompt.prompt_type == 'generated' else 'Predefined'}")
+    click.echo(f"Cloud: {prompt.cloud}")
+    click.echo(f"Type: {prompt.prompt_type}")
+    click.echo(f"Tags: {', '.join(prompt.tags)}")
 
-    if prompt.generated_by:
+    if prompt.prompt_type == PromptType.GENERATED:
+        click.echo("\nGeneration Info:")
+        click.echo("-" * 40)
         click.echo(f"Generated By: {prompt.generated_by}")
-    if prompt.generated_at:
         click.echo(f"Generated At: {prompt.generated_at}")
+        click.echo(f"Iteration: {getattr(prompt, 'iteration', 1)}")
+        click.echo(f"Parent Request: {getattr(prompt, 'parent_request_id', '-')}")
+
+        click.echo("\nDiscovery Status:")
+        click.echo("-" * 40)
+        discovery_complete = getattr(prompt, "discovery_complete", None)
+        click.echo(f"Discovery Complete: {'✓' if discovery_complete else '...' if discovery_complete is False else '-'}")
+
+        if hasattr(prompt, "discovered_resources") and prompt.discovered_resources:
+            click.echo("\nDiscovered Resources:")
+            for resource in prompt.discovered_resources:
+                click.echo(f"  - {json.dumps(resource)}")
+
+        if hasattr(prompt, "dependencies") and prompt.dependencies:
+            click.echo("\nDependencies:")
+            for dep in prompt.dependencies:
+                click.echo(f"  - {dep}")
+
+        if hasattr(prompt, "next_discovery_targets") and prompt.next_discovery_targets:
+            click.echo("\nNext Discovery Targets:")
+            for target in prompt.next_discovery_targets:
+                click.echo(f"  - {target}")
+
+    click.echo("\nDescription:")
+    click.echo("-" * 40)
+    click.echo(prompt.description)
 
     if prompt.variables:
         click.echo("\nVariables:")
+        click.echo("-" * 40)
         for var in prompt.variables:
-            click.echo(f"  - {var['name']}: {var['description']}")
+            click.echo(f"  {var['name']}: {var['description']}")
 
-    click.echo(f"\nTags: {', '.join(prompt.tags)}")
     click.echo("\nTemplate:")
     click.echo("-" * 40)
     click.echo(prompt.template)
