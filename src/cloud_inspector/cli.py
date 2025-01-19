@@ -125,7 +125,7 @@ def list_prompts(
     headers = ["Name", "Service", "Operation", "Type", "Discovery", "Parent Request"]
 
     # Emoji mapping for prompt types
-    PROMPT_TYPE_EMOJI = {"predefined": "📝", "generated": "🤖", None: "-"}
+    prompt_type_emoji = {"predefined": "📝", "generated": "🤖", None: "-"}
 
     rows = []
     for name, prompt in prompts.items():
@@ -134,7 +134,7 @@ def list_prompts(
         parent_req = getattr(prompt, "parent_request_id", "-")
         service = prompt.service if prompt.service is not None else "-"
         operation = prompt.operation if prompt.operation is not None else "-"
-        prompt_type = PROMPT_TYPE_EMOJI.get(prompt.prompt_type, "-")
+        prompt_type = prompt_type_emoji.get(prompt.prompt_type, "-")
         parent_req_display = parent_req[:8] + "..." if parent_req and parent_req != "-" and len(parent_req) > 8 else parent_req
         rows.append([name, service, operation, prompt_type, discovery_str, parent_req_display])
 

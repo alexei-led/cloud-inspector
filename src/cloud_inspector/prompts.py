@@ -211,7 +211,7 @@ class PromptManager:
                             prompt_data.setdefault("discovery_complete", False)
                             prompt_data.setdefault("iteration", 1)
                             prompt_data.setdefault("parent_request_id", None)
-                            
+
                             prompt = PromptTemplate(**prompt_data)
                             self.prompts[name] = prompt
                 except Exception as e:
