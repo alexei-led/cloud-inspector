@@ -109,6 +109,27 @@ class PromptType(str, Enum):
     GENERATED = "generated"
 
 
+class PromptIteration(BaseModel):
+    """Single iteration of a prompt execution."""
+
+    iteration_id: str = Field(..., description="Unique identifier for this iteration")
+    prompt_name: str = Field(..., description="Name of the parent prompt")
+    iteration_number: int = Field(..., description="Iteration number")
+    input_variables: dict[str, Any] = Field(..., description="Input variables used")
+    generated_code: dict[str, str] = Field(..., description="Generated code files")
+    execution_results: Optional[dict[str, Any]] = Field(None, description="Results from manual execution")
+    feedback: Optional[dict[str, Any]] = Field(None, description="User feedback and observations")
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class PromptHistory(BaseModel):
+    """History of prompt iterations."""
+
+    prompt_name: str = Field(..., description="Name of the prompt")
+    iterations: list[PromptIteration] = Field(default_factory=list)
+    latest_iteration: int = Field(default=0)
+
+
 class PromptTemplate(BaseModel):
     """Single prompt template definition."""
 
@@ -129,35 +150,7 @@ class PromptTemplate(BaseModel):
     dependencies: list[str] = Field(default_factory=list, description="List of dependencies")
     next_discovery_targets: list[str] = Field(default_factory=list, description="List of next discovery targets")
     discovery_complete: bool = Field(default=False, description="Whether discovery is complete")
-    iteration: int = Field(default=1, description="Current iteration")
-    parent_request_id: Optional[str] = Field(None, description="Parent request ID")
-
-    def format_messages(self, variables: dict[str, Any], supports_system_prompt: bool = True) -> list[Any]:
-        """Format the prompt into chat messages."""
-        # Validate that all required variables are provided
-        required_var_names = {var["name"] for var in self.variables}
-        provided_var_names = set(variables.keys())
-        missing_vars = required_var_names - provided_var_names
-
-        if missing_vars:
-            var_descriptions = {var["name"]: var["description"] for var in self.variables if var["name"] in missing_vars}
-            raise ValueError(f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}")
-
-        if supports_system_prompt:
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("system", SYSTEM_MESSAGE),
-                    ("user", self.template),
-                ]
-            )
-        else:
-            combined_prompt = f"<instructions>{SYSTEM_MESSAGE}</instructions>\n\n<question>{self.template}</question>"
-            prompt = ChatPromptTemplate.from_messages(
-                [
-                    ("user", combined_prompt),
-                ]
-            )
-        return prompt.format_messages(**variables)
+    history: Optional[PromptHistory] = Field(None, description="History of iterations")
 
 
 class PromptCollection(BaseModel):
@@ -173,11 +166,14 @@ class PromptManager:
         self,
         prompt_dir: Optional[Path] = None,
         generated_prompt_dir: Optional[Path] = None,
+        history_dir: Optional[Path] = None,
     ):
         self.prompt_dir = prompt_dir or Path("prompts")
         self.generated_prompt_dir = generated_prompt_dir or Path("generated_prompts")
+        self.history_dir = history_dir or Path("prompt_history")
         self.prompts: dict[str, PromptTemplate] = {}
         self._load_prompts()
+        self._load_history()
 
     def _load_prompts(self) -> None:
         """Load prompts from both predefined and generated directories."""
@@ -216,6 +212,21 @@ class PromptManager:
                             self.prompts[name] = prompt
                 except Exception as e:
                     print(f"Error loading generated prompts from {file}: {e}")
+
+    def _load_history(self):
+        """Load prompt execution history."""
+        if not self.history_dir.exists():
+            self.history_dir.mkdir(parents=True)
+
+        for history_file in self.history_dir.glob("*.yaml"):
+            try:
+                with open(history_file) as f:
+                    history_data = yaml.safe_load(f)
+                    prompt_name = history_file.stem
+                    if prompt_name in self.prompts:
+                        self.prompts[prompt_name].history = PromptHistory(**history_data)
+            except Exception as e:
+                print(f"Error loading history for {history_file}: {e}")
 
     def save_prompt(self, name: str, prompt: PromptTemplate) -> None:
         """Save a prompt to the appropriate directory."""
@@ -273,7 +284,32 @@ class PromptManager:
         prompt = self.get_prompt(name)
         if not prompt:
             raise ValueError(f"Prompt '{name}' not found")
-        return prompt.format_messages(variables, supports_system_prompt)
+
+        # Validate that all required variables are provided
+        required_var_names = {var["name"] for var in prompt.variables}
+        provided_var_names = set(variables.keys())
+        missing_vars = required_var_names - provided_var_names
+
+        if missing_vars:
+            var_descriptions = {var["name"]: var["description"] for var in prompt.variables if var["name"] in missing_vars}
+            raise ValueError(f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}")
+
+        if supports_system_prompt:
+            chat_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("system", SYSTEM_MESSAGE),
+                    ("user", prompt.template),
+                ]
+            )
+        else:
+            combined_prompt = f"<instructions>{SYSTEM_MESSAGE}</instructions>\n\n<question>{prompt.template}</question>"
+            chat_prompt = ChatPromptTemplate.from_messages(
+                [
+                    ("user", combined_prompt),
+                ]
+            )
+
+        return chat_prompt.format_messages(**variables)
 
     def validate_prompt_file(self, file_path: Path) -> list[str]:
         """Validate a prompt file format and content."""
@@ -314,3 +350,46 @@ class PromptManager:
             errors.append(f"Error reading file: {str(e)}")
 
         return errors
+
+    def save_iteration(self, prompt_name: str, iteration: PromptIteration):
+        """Save a new iteration for a prompt."""
+        if prompt_name not in self.prompts:
+            raise ValueError(f"Prompt {prompt_name} not found")
+
+        prompt = self.prompts[prompt_name]
+        if prompt.history is None:
+            prompt.history = PromptHistory(prompt_name=prompt_name)
+
+        prompt.history.iterations.append(iteration)
+        prompt.history.latest_iteration = max(prompt.history.latest_iteration, iteration.iteration_number)
+
+        # Save history to file
+        history_file = self.history_dir / f"{prompt_name}.yaml"
+        with open(history_file, "w") as f:
+            yaml.dump(prompt.history.dict(), f)
+
+    def get_iteration_history(self, prompt_name: str) -> Optional[PromptHistory]:
+        """Get the iteration history for a prompt."""
+        if prompt_name not in self.prompts:
+            raise ValueError(f"Prompt {prompt_name} not found")
+        return self.prompts[prompt_name].history
+
+    def create_next_iteration(self, prompt_name: str, input_variables: dict[str, Any], previous_results: Optional[dict[str, Any]] = None, feedback: Optional[dict[str, Any]] = None) -> PromptIteration:
+        """Create a new iteration based on previous results and feedback."""
+        if prompt_name not in self.prompts:
+            raise ValueError(f"Prompt {prompt_name} not found")
+
+        prompt = self.prompts[prompt_name]
+        next_iteration = (prompt.history.latest_iteration + 1) if prompt.history else 1
+
+        iteration = PromptIteration(
+            iteration_id=f"{prompt_name}_{next_iteration}",
+            prompt_name=prompt_name,
+            iteration_number=next_iteration,
+            input_variables=input_variables,
+            generated_code={},  # Will be filled after code generation
+            execution_results=previous_results,
+            feedback=feedback,
+        )
+
+        return iteration

@@ -8,8 +8,9 @@ from typing import Optional
 
 import click
 
+from cloud_inspector.iteration_manager import IterationManager
 from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import CloudProvider, PromptManager, PromptType
+from cloud_inspector.prompts import PromptManager, PromptType
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
@@ -60,6 +61,8 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
         project_name=project,
     )
     ctx.obj["workflow_manager"] = WorkflowManager()
+    ctx.obj["prompt_generator"] = PromptGenerator(model_registry=ctx.obj["registry"])
+    ctx.obj["iteration_manager"] = IterationManager(ctx.obj["prompt_manager"], ctx.obj["workflow"], ctx.obj["prompt_generator"])
 
 
 # Prompt Management Commands
@@ -161,10 +164,10 @@ def list_prompts(
         click.echo(row_format.format(*formatted_row))
 
 
-@prompt.command()
+@prompt.command(name="show")
 @click.argument("name")
 @click.pass_context
-def show(ctx: click.Context, name: str):
+def show_prompt(ctx: click.Context, name: str):
     """Show details of a specific prompt."""
     prompt_manager = ctx.obj["prompt_manager"]
     prompt = prompt_manager.get_prompt(name)
@@ -270,123 +273,17 @@ def list_models(ctx: click.Context):
         click.echo(f"{name:<{max_name_length}}    {config['model_id']}")
 
 
-@prompt.command(name="generate")
-@click.option("--cloud", required=True, help="Cloud provider (e.g., aws, gcp, azure)")
-@click.option("--service", required=True, help="Service name within the cloud provider")
-@click.option("--request", required=True, help="Description of the prompt to generate")
-@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
-@click.option("--discovered-data", type=click.Path(exists=True, dir_okay=False), help="Path to JSON file containing previously discovered data")
-@click.option("--iteration", type=int, default=1, help="Current iteration number")
-@click.option("--parent-request-id", help="ID of the original user request")
-@click.pass_context
-def generate_prompt(
-    ctx: click.Context,
-    cloud: str,
-    service: str,
-    request: str,
-    model: str,
-    discovered_data: Optional[str],
-    iteration: int,
-    parent_request_id: Optional[str],
-):
-    """Generate a new prompt template from a request."""
-    # Load discovered data from JSON file if provided
-    discovered_data_dict = None
-    if discovered_data:
-        with open(discovered_data) as f:
-            discovered_data_dict = json.load(f)
-
-    generator = PromptGenerator(ctx.obj["registry"])
-    result, saved_path = generator.generate_prompt(
-        model,
-        service,
-        request,
-        discovered_data=discovered_data_dict,
-        iteration=iteration,
-        parent_request_id=parent_request_id,
-        cloud=CloudProvider(cloud),
-    )
-
-    # Display the generated prompt
-    click.echo("\nGenerated Prompt:")
-    click.echo("=" * 120)
-    click.echo(f"Service: {result.service}")
-    click.echo(f"Operation: {result.operation}")
-    click.echo(f"\nPrompt saved to: {saved_path}")
-
-
 @cli.group()
 def code():
-    """Generate and manage code generation results."""
+    """View and manage code generation results from iterations."""
     pass
-
-
-@code.command(name="generate")
-@click.option("--prompt", "prompt_name", required=True, help="Name of the prompt to use.")
-@click.option("--model", default="gpt-4o-mini", help="Name of the LLM model to use.")
-@click.option("--var", "-v", multiple=True, help="Variables in key=value format.")
-@click.pass_context
-def generate_code(ctx: click.Context, prompt_name: str, model: str, var: tuple[str, ...]):
-    """Generate code using a specified prompt and model."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    prompt = prompt_manager.get_prompt(prompt_name)
-
-    if not prompt:
-        click.echo(f"Error: Prompt '{prompt_name}' not found.")
-        return
-
-    # Parse variables
-    variables = {}
-    for v in var:
-        try:
-            key, value = v.split("=", 1)
-            variables[key.strip()] = value.strip()
-        except ValueError:
-            click.echo(f"Invalid variable format: {v}")
-            click.echo("Use format: key=value")
-            return
-
-    # Show required variables if none provided
-    if not var and prompt.variables:
-        click.echo("\nRequired variables for this prompt:")
-        for var_info in prompt.variables:
-            click.echo(f"  - {var_info['name']}: {var_info['description']}")
-        click.echo("\nUse --var/-v option to provide values (e.g., -v name=value)")
-        return
-
-    def get_workflow(ctx) -> CodeGenerationWorkflow:
-        """Get CodeGenerationWorkflow instance from Click context."""
-        workflow = ctx.obj.get("workflow")
-        if not workflow:
-            raise RuntimeError("Workflow not found in context")
-
-        if not isinstance(workflow, CodeGenerationWorkflow):
-            raise TypeError("Invalid workflow type")
-
-        return workflow
-
-    # Execute workflow
-    flow = get_workflow(ctx)
-    try:
-        result, output_dir = flow.execute(prompt_name, model, variables)
-
-        if result.success:
-            click.echo("\nCode Generation Successful!")
-            click.echo("=" * 120)
-            click.echo(f"\nFiles saved to: {output_dir}")
-        else:
-            click.echo("\nCode Generation Failed!")
-            click.echo("=" * 120)
-            click.echo(f"Error: {result.error}")
-    except ValueError as e:
-        click.echo(f"\nError: {str(e)}")
 
 
 @code.command(name="list")
 @click.option("--prompt", help="Filter by prompt name")
 @click.option("--model", help="Filter by model name")
-@click.option("--start", type=click.DateTime(), help="Filter from this start time")
-@click.option("--end", type=click.DateTime(), help="Filter until this end time")
+@click.option("--start", type=click.DateTime(), help="Filter by start time")
+@click.option("--end", type=click.DateTime(), help="Filter by end time")
 @click.pass_context
 def list_code_results(
     ctx: click.Context,
@@ -395,57 +292,155 @@ def list_code_results(
     start: Optional[datetime],
     end: Optional[datetime],
 ):
-    """List previous code generation results."""
-    results = ctx.obj["workflow_manager"].list_results(prompt, model, start, end)
+    """List code generation results from iterations."""
+    iteration_manager = ctx.obj["iteration_manager"]
+    results = iteration_manager.list_results(prompt=prompt, model=model, start_time=start, end_time=end)
 
     if not results:
-        click.echo("No results found.")
+        click.echo("No code generation results found.")
         return
 
-    click.echo("\nWorkflow Results:")
-    click.echo("=" * 80)
+    click.echo("\nCode Generation Results:")
+    click.echo("=" * 100)
+
+    headers = ["Request ID", "Prompt", "Model", "Status", "Created At"]
+    rows = []
+
     for result in results:
-        click.echo(f"\nPrompt: {result['prompt_name']}")
-        click.echo(f"Model: {result['model_name']}")
-        click.echo(f"Timestamp: {result['timestamp']}")
-        click.echo(f"Success: {'✅' if result['success'] else '❌'}")
-        click.echo(f"Execution Time: {result['execution_time']:.2f}s")
-        if not result["success"]:
-            click.echo(f"Error: {result['error']}")
-        click.echo("-" * 40)
+        rows.append([result.request_id, result.prompt_name, result.model_name, result.status, result.created_at.strftime("%Y-%m-%d %H:%M:%S")])
+
+    # Calculate column widths
+    widths = [max(len(str(row[i])) for row in [headers] + rows) for i in range(len(headers))]
+    row_format = "  ".join(f"{{:<{w}}}" for w in widths)
+
+    # Print headers
+    click.echo(row_format.format(*headers))
+    click.echo("-" * 100)
+
+    # Print rows
+    for row in rows:
+        click.echo(row_format.format(*row))
 
 
-@code.command(name="stats")
+@cli.group()
+def iterate():
+    """Manage iterative data collection process."""
+    pass
+
+
+@iterate.command()
+@click.argument("request")
+@click.argument("service")
+@click.option("--model", default="gpt-4", help="Name of the LLM model to use.")
 @click.pass_context
-def code_stats(ctx: click.Context):
-    """Show statistics about code generation executions."""
-    workflow_manager = ctx.obj["workflow_manager"]
-    wf_stats = workflow_manager.get_statistics()
+def start(ctx: click.Context, request: str, service: str, model: str):
+    """Start a new iteration process."""
+    manager = ctx.obj["iteration_manager"]
+    request_id, result, output_path = manager.start_iteration(request, service, model)
 
-    click.echo("\nWorkflow Statistics:")
-    click.echo("=" * 80)
-    click.echo(f"Total Executions: {wf_stats['total_executions']}")
-    click.echo(f"Successful: {wf_stats['successful_executions']}")
-    click.echo(f"Failed: {wf_stats['failed_executions']}")
-    click.echo(f"Average Execution Time: {wf_stats['average_execution_time']:.2f}s")
+    click.echo(f"\nStarted iteration process: {request_id}")
+    if result.generated_files:
+        click.echo("\nGenerated files:")
+        for filename, content in result.generated_files.items():
+            click.echo(f"\n{filename}:")
+            click.echo(content)
+        click.echo(f"\nFiles saved to: {output_path}")
+    else:
+        click.echo("No files were generated")
 
-    click.echo("\nBy Model:")
-    click.echo("-" * 40)
-    for model, data in wf_stats["by_model"].items():
-        success_rate = (data["successful"] / data["total"]) * 100 if data["total"] > 0 else 0
-        click.echo(f"{model}: {data['successful']}/{data['total']} ({success_rate:.1f}% success)")
 
-    click.echo("\nBy Prompt:")
-    click.echo("-" * 40)
-    for prompt, data in wf_stats["by_prompt"].items():
-        success_rate = (data["successful"] / data["total"]) * 100 if data["total"] > 0 else 0
-        click.echo(f"{prompt}: {data['successful']}/{data['total']} ({success_rate:.1f}% success)")
+@iterate.command()
+@click.argument("request_id")
+@click.argument("data_file", type=click.Path(exists=True))
+@click.option("--source", multiple=True, help="Source files used to collect data.")
+@click.option("--feedback", help="Feedback for next iteration in JSON format.")
+@click.pass_context
+def collect(
+    ctx: click.Context,
+    request_id: str,
+    data_file: str,
+    source: tuple[str, ...],
+    feedback: Optional[str],
+) -> None:
+    """Save collected data from manual code execution."""
+    prompt_manager = ctx.obj["prompt_manager"]
+    workflow = ctx.obj["workflow"]
+    prompt_generator = ctx.obj["prompt_generator"]
+    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
 
-    if wf_stats["common_errors"]:
-        click.echo("\nCommon Errors:")
-        click.echo("-" * 40)
-        for error, count in wf_stats["common_errors"].items():
-            click.echo(f"{error}: {count} occurrences")
+    try:
+        # Parse feedback if provided
+        feedback_dict = json.loads(feedback) if feedback else None
+
+        # Save collected data
+        iteration_manager.save_collected_data(
+            request_id,
+            Path(data_file),
+            list(source),
+            feedback_dict,
+        )
+        click.echo(f"Saved collected data for {request_id}")
+    except Exception as e:
+        click.echo(f"Error saving collected data: {e}", err=True)
+
+
+@iterate.command()
+@click.argument("request_id")
+@click.option("--model", default="gpt-4", help="Name of the LLM model to use.")
+@click.pass_context
+def next(ctx: click.Context, request_id: str, model: str):
+    """Start next iteration for data collection."""
+    manager = ctx.obj["iteration_manager"]
+    result = manager.next_iteration(request_id, model)
+
+    if result:
+        workflow_result, output_path = result
+        click.echo(f"Started next iteration for {request_id}")
+        if workflow_result.generated_files:
+            click.echo("\nGenerated files:")
+            for filename, content in workflow_result.generated_files.items():
+                click.echo(f"\n{filename}:")
+                click.echo(content)
+            click.echo(f"\nFiles saved to: {output_path}")
+        else:
+            click.echo("No files were generated")
+    else:
+        click.echo("No more iterations needed or request ID not found")
+
+
+@iterate.command()
+@click.argument("request_id")
+@click.argument("reason")
+@click.pass_context
+def complete(ctx: click.Context, request_id: str, reason: str) -> None:
+    """Mark an iteration process as complete."""
+    prompt_manager = ctx.obj["prompt_manager"]
+    workflow = ctx.obj["workflow"]
+    prompt_generator = ctx.obj["prompt_generator"]
+    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
+
+    try:
+        iteration_manager.complete_iteration(request_id, reason)
+        click.echo(f"Marked {request_id} as complete: {reason}")
+    except Exception as e:
+        click.echo(f"Error completing iteration: {e}", err=True)
+
+
+@iterate.command()
+@click.argument("request_id")
+@click.pass_context
+def show(ctx: click.Context, request_id: str) -> None:
+    """Show collected data for a request."""
+    prompt_manager = ctx.obj["prompt_manager"]
+    workflow = ctx.obj["workflow"]
+    prompt_generator = ctx.obj["prompt_generator"]
+    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
+
+    try:
+        data = iteration_manager.get_collected_data(request_id)
+        click.echo(json.dumps(data, indent=2, cls=DateTimeEncoder))
+    except Exception as e:
+        click.echo(f"Error showing collected data: {e}", err=True)
 
 
 if __name__ == "__main__":

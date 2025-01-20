@@ -28,14 +28,18 @@ from langchain_components.templates import GeneratedFiles
 class WorkflowResult:
     """Result of a workflow execution."""
 
-    prompt_name: str
+    prompt_template: str
     model_name: str
     timestamp: datetime
     execution_time: float
     success: bool
+    iteration_id: Optional[str] = None
+    iteration_number: Optional[int] = None
     run_id: Optional[str] = None
     error: Optional[str] = None
     generated_files: Optional[dict[str, str]] = None
+    execution_results: Optional[dict[str, Any]] = None
+    feedback: Optional[dict[str, Any]] = None
 
 
 # Constants for token limit detection
@@ -103,11 +107,7 @@ class CodeGenerationWorkflow:
                     "policy.json": self._reformat_code(continuation["parsed"].policy_json),
                 }
 
-            raw_response = (
-                continuation.get("raw", "").content
-                if isinstance(continuation.get("raw"), BaseMessage)
-                else str(continuation.get("raw", ""))
-            )
+            raw_response = continuation.get("raw", "").content if isinstance(continuation.get("raw"), BaseMessage) else str(continuation.get("raw", ""))
             accumulated_response += f"\n{raw_response}"
 
             # Check if this is still a token limit issue
@@ -116,9 +116,7 @@ class CodeGenerationWorkflow:
 
             retry_count += 1
 
-        raise TokenLimitError(
-            f"Failed to get complete response after {MAX_RETRIES} retries.\nAccumulated response: {accumulated_response}"
-        )
+        raise TokenLimitError(f"Failed to get complete response after {MAX_RETRIES} retries.\nAccumulated response: {accumulated_response}")
 
     def _extract_latest_generated_files(self, raw_response: Union[str, list[dict]]) -> dict[str, str]:
         """Extract latest GeneratedFiles content from Nova model response."""
@@ -138,8 +136,27 @@ class CodeGenerationWorkflow:
             raise ParseError("No GeneratedFiles content found")
         return latest_files
 
-    def execute(self, prompt_name: str, model_name: str, variables: dict[str, Any]) -> tuple[WorkflowResult, Path]:
-        """Execute the code generation workflow."""
+    def execute(
+        self,
+        prompt_template: str,
+        model_name: str,
+        variables: dict[str, Any],
+        iteration_id: Optional[str] = None,
+        iteration_number: Optional[int] = None,
+        previous_results: Optional[dict[str, Any]] = None,
+        feedback: Optional[dict[str, Any]] = None,
+    ) -> tuple[WorkflowResult, Path]:
+        """Execute the code generation workflow.
+
+        Args:
+            prompt_template: The prompt template to use for code generation
+            model_name: Name of the model to use for code generation
+            variables: Variables to inject into the prompt (request, service, iteration)
+            iteration_id: Optional ID to track this iteration
+            iteration_number: Optional iteration number for this request
+            previous_results: Optional dict containing data discovered in previous iterations
+            feedback: Optional dict containing user feedback/direction for this iteration
+        """
         start_time = datetime.now()
 
         try:
@@ -148,23 +165,22 @@ class CodeGenerationWorkflow:
                 raise ValueError(f"Model '{model_name}' does not support code generation")
 
             with collect_runs() as runs_cb:
-                run_name = f"code_generation_{prompt_name}"
-                tags = ["code_generation", prompt_name, model_name]
-
-                # Get model config to check system prompt support
-                model_config = self.model_registry.models[model_name]
-                supports_system_prompt = model_config.supports_system_prompt
-
-                messages = self.prompt_manager.format_prompt(
-                    prompt_name,
-                    variables,
-                    supports_system_prompt=supports_system_prompt,
-                )
-                if not messages:
-                    raise ValueError(f"Prompt '{prompt_name}' not found")
+                tags = ["code_generation", variables.get("service", ""), model_name]
+                if iteration_id:
+                    tags.append(f"iteration_{iteration_id}")
 
                 model = self.model_registry.get_model(model_name)
-                model = model.with_config({"run_name": run_name, "tags": tags})
+
+                # Format prompt using PromptManager
+                messages = self.prompt_manager.format_prompt(prompt_template, variables)
+
+                # Add context from previous results and feedback if available
+                if previous_results:
+                    context = "Previous execution results:\n" + json.dumps(previous_results, indent=2)
+                    messages.append({"role": "user", "content": context})
+                if feedback:
+                    feedback_msg = "User feedback:\n" + json.dumps(feedback, indent=2)
+                    messages.append({"role": "user", "content": feedback_msg})
 
                 structured_output_params = self.model_registry.get_structured_output_params(model_name, GeneratedFiles)
                 if not structured_output_params.get("include_raw"):
@@ -180,37 +196,29 @@ class CodeGenerationWorkflow:
                     generated_files = {
                         "main.py": self._reformat_code(response["parsed"].main_py, code=True),
                         "requirements.txt": self._reformat_code(response["parsed"].requirements_txt),
-                        "policy.json": (
-                            response["parsed"].policy_json
-                            if isinstance(response["parsed"].policy_json, dict)
-                            else self._reformat_code(response["parsed"].policy_json)
-                        ),
+                        "policy.json": self._reformat_code(response["parsed"].policy_json),
                     }
                 else:
-                    raw_response = (
-                        response.get("raw", "").content
-                        if isinstance(response.get("raw"), BaseMessage)
-                        else str(response.get("raw", ""))
-                    )
+                    raw_response = response.get("raw", "").content if isinstance(response.get("raw"), BaseMessage) else str(response.get("raw", ""))
                     latest_files = self._extract_latest_generated_files(raw_response)
                     generated_files = {
                         "main.py": self._reformat_code(latest_files["main_py"], code=True),
                         "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
-                        "policy.json": (
-                            latest_files["policy_json"]
-                            if isinstance(latest_files["policy_json"], dict)
-                            else self._reformat_code(latest_files["policy_json"])
-                        ),
+                        "policy.json": self._reformat_code(latest_files["policy_json"]),
                     }
 
                 result = WorkflowResult(
-                    prompt_name=prompt_name,
+                    prompt_template=prompt_template,
                     model_name=model_name,
                     timestamp=start_time,
                     execution_time=(datetime.now() - start_time).total_seconds(),
                     success=True,
+                    iteration_id=iteration_id,
+                    iteration_number=iteration_number,
                     run_id=str(runs_cb.traced_runs[0].id),
                     generated_files=generated_files,
+                    execution_results=previous_results,
+                    feedback=feedback,
                 )
 
                 output_dir = self._save_result(result)
@@ -218,16 +226,17 @@ class CodeGenerationWorkflow:
 
         except Exception as e:
             result = WorkflowResult(
-                prompt_name=prompt_name,
+                prompt_template=prompt_template,
                 model_name=model_name,
                 timestamp=start_time,
                 execution_time=(datetime.now() - start_time).total_seconds(),
                 success=False,
                 error=str(e),
-                generated_files={},
+                iteration_id=iteration_id,
+                iteration_number=iteration_number,
             )
             output_dir = self._save_result(result)
-            return result, output_dir
+            raise e
 
     def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
@@ -280,7 +289,7 @@ class CodeGenerationWorkflow:
         """Save workflow result to file."""
         # Create timestamp-based filename
         timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
-        base_name = f"{result.prompt_name}_{result.model_name}_{timestamp}"
+        base_name = f"{result.prompt_template}_{result.model_name}_{timestamp}"
 
         # Create a directory for this run
         run_dir = self.output_dir / base_name
@@ -291,13 +300,9 @@ class CodeGenerationWorkflow:
             for filename, content in result.generated_files.items():
                 try:
                     file_path = run_dir / filename
-                    if filename.endswith(".json") and isinstance(content, dict):
-                        with open(file_path, "w") as f:
-                            json.dump(content, f, indent=2)
-                    else:
-                        with open(file_path, "w") as f:
-                            f.write(content)
-                            f.flush()
+                    with open(file_path, "w") as f:
+                        f.write(content)
+                        f.flush()
                 except Exception as e:
                     print(f"Error saving {filename}: {e}")
 
@@ -306,13 +311,17 @@ class CodeGenerationWorkflow:
         with meta_file.open("w") as f:
             json.dump(
                 {
-                    "prompt_name": result.prompt_name,
+                    "prompt_template": result.prompt_template,
                     "model_name": result.model_name,
                     "timestamp": result.timestamp.isoformat(),
                     "execution_time": result.execution_time,
                     "success": result.success,
                     "error": result.error,
                     "run_id": str(result.run_id) if result.run_id else None,
+                    "iteration_id": str(result.iteration_id) if result.iteration_id else None,
+                    "iteration_number": str(result.iteration_number) if result.iteration_number else None,
+                    "execution_results": result.execution_results,
+                    "feedback": result.feedback,
                 },
                 f,
                 indent=2,
@@ -330,7 +339,7 @@ class WorkflowManager:
 
     def list_results(
         self,
-        prompt_name: Optional[str] = None,
+        prompt_template: Optional[str] = None,
         model_name: Optional[str] = None,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None,
@@ -346,7 +355,7 @@ class WorkflowManager:
 
                 # Apply filters
                 timestamp = datetime.fromisoformat(data["timestamp"])
-                if prompt_name and data["prompt_name"] != prompt_name:
+                if prompt_template and data["prompt_template"] != prompt_template:
                     continue
                 if model_name and data["model_name"] != model_name:
                     continue
@@ -362,9 +371,9 @@ class WorkflowManager:
 
         return sorted(results, key=lambda x: x["timestamp"], reverse=True)
 
-    def get_result(self, prompt_name: str, timestamp: str) -> Optional[dict[str, Any]]:
+    def get_result(self, prompt_template: str, timestamp: str) -> Optional[dict[str, Any]]:
         """Get a specific workflow result."""
-        for meta_file in self.output_dir.glob(f"{prompt_name}_*_{timestamp}_meta.json"):
+        for meta_file in self.output_dir.glob(f"{prompt_template}_*_{timestamp}_meta.json"):
             try:
                 with meta_file.open("r") as f:
                     return json.load(f)
@@ -397,7 +406,7 @@ class WorkflowManager:
                 stats["by_model"][model]["successful"] += 1
 
             # Stats by prompt
-            prompt = result["prompt_name"]
+            prompt = result["prompt_template"]
             if prompt not in stats["by_prompt"]:
                 stats["by_prompt"][prompt] = {"total": 0, "successful": 0}
             stats["by_prompt"][prompt]["total"] += 1
