@@ -110,14 +110,14 @@ The prompt should be clear, structured, and focused on the current phase goals."
             setattr(model, "model_kwargs", model_kwargs)  # noqa: B010
 
         response = model.invoke(messages)
-        template = self._extract_template(response)
+        template, new_variables = self._extract_template(response)
 
         return PromptTemplate(
             service=service,
             operation=operation,
             description=description,
             template=template,
-            variables=variables,
+            variables=new_variables,
             tags=tags,
             cloud=cloud,
             generated_by=model_name,
@@ -130,14 +130,8 @@ The prompt should be clear, structured, and focused on the current phase goals."
 
     def _get_iteration_phase(self, iteration: int, previous_results: Optional[dict[str, Any]]) -> str:
         """Determine the current iteration phase based on progress."""
-        if iteration == 1:
-            return "Initial Discovery"
-        elif iteration == 2:
-            return "Detailed Analysis"
-        elif iteration == 3:
-            return "Validation and Enhancement"
-        else:
-            return "Refinement and Completion"
+        phases = {1: "Initial Discovery", 2: "Detailed Analysis", 3: "Validation and Enhancement"}
+        return phases.get(iteration, "Refinement and Completion")
 
     def _get_iteration_goals(self, phase: str, service: str, operation: str) -> str:
         """Get specific goals for the current iteration phase."""
@@ -146,22 +140,22 @@ The prompt should be clear, structured, and focused on the current phase goals."
 - List basic {service} resources and their configurations
 - Identify key parameters and settings
 - Establish baseline inventory""",
-            "Detailed Analysis": f"""
+            "Detailed Analysis": """
 - Analyze relationships between discovered resources
 - Gather detailed configuration and status information
 - Identify potential security or compliance issues""",
-            "Validation and Enhancement": f"""
+            "Validation and Enhancement": """
 - Validate collected data against best practices
 - Enhance error handling and logging
 - Implement comprehensive resource filtering""",
-            "Refinement and Completion": f"""
+            "Refinement and Completion": """
 - Address any gaps in collected data
 - Optimize code performance and reliability
-- Ensure all error cases are handled"""
+- Ensure all error cases are handled""",
         }
         return goals.get(phase, "Complete remaining discovery tasks")
 
-    def _extract_template(self, response: BaseMessage) -> str:
+    def _extract_template(self, response: BaseMessage) -> tuple[str, list[dict[str, str]]]:
         """Extract the prompt template from the model response."""
         try:
             # Extract content from the response
@@ -175,17 +169,13 @@ The prompt should be clear, structured, and focused on the current phase goals."
 
             # Extract template and variables
             template = data.get("template", "").strip()
-            
+
             # Parse any new variables from response
             new_vars = []
-            for var in data.get('variables', []):
-                if isinstance(var, dict) and 'name' in var and 'description' in var:
-                    new_vars.append({
-                        'name': var['name'],
-                        'description': var['description'],
-                        'value': var.get('default_value', '')
-                    })
-            
+            for var in data.get("variables", []):
+                if isinstance(var, dict) and "name" in var and "description" in var:
+                    new_vars.append({"name": var["name"], "description": var["description"], "value": var.get("default_value", "")})
+
             # Merge new variables with existing ones
             return template, new_vars
         except Exception as e:
