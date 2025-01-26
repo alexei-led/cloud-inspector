@@ -46,6 +46,10 @@ class PromptGenerator:
         # Format variables as simple name-value pairs
         vars_formatted = "\n".join(f"  {v['name']}: {v['value']}" for v in variables)
 
+        # Determine iteration phase and goals
+        iteration_phase = self._get_iteration_phase(iteration, previous_results)
+        iteration_goals = self._get_iteration_goals(iteration_phase, service, operation)
+
         system_prompt = f"""You are an expert prompt engineer specializing in creating prompts for code generation.
 Your task is to create a prompt that will be used by another AI model to generate Python code for cloud operations.
 
@@ -61,6 +65,10 @@ Original Request: {description}
 Cloud Service: {cloud.value} {service}
 Operation: {operation}
 Current Iteration: {iteration}
+Phase: {iteration_phase}
+
+=== GOALS ===
+{iteration_goals}
 
 === STATE ===
 Previously Discovered Data:
@@ -72,9 +80,17 @@ User Feedback:
 Variables:
 {vars_formatted}
 
+=== REQUIRED VARIABLES ===
+The generated prompt should specify any additional variables needed for code generation.
+Format: YAML list under 'required_variables' with 'name' and 'description' fields.
+
 === OUTPUT FORMAT ===
-Return a YAML document containing only a 'template' field with your generated prompt.
-The prompt should be clear, structured, and focused on the next piece of information to discover."""
+Return a YAML document containing:
+1. 'template' field with your generated prompt
+2. 'required_variables' field listing any new variables needed
+3. 'completion_criteria' field describing what defines success for this iteration
+
+The prompt should be clear, structured, and focused on the current phase goals."""
 
         messages = [
             {
@@ -108,6 +124,39 @@ The prompt should be clear, structured, and focused on the next piece of informa
             discovery_complete=(iteration > 3),  # Simple example threshold
             history=None,
         )
+
+    def _get_iteration_phase(self, iteration: int, previous_results: Optional[dict[str, Any]]) -> str:
+        """Determine the current iteration phase based on progress."""
+        if iteration == 1:
+            return "Initial Discovery"
+        elif iteration == 2:
+            return "Detailed Analysis"
+        elif iteration == 3:
+            return "Validation and Enhancement"
+        else:
+            return "Refinement and Completion"
+
+    def _get_iteration_goals(self, phase: str, service: str, operation: str) -> str:
+        """Get specific goals for the current iteration phase."""
+        goals = {
+            "Initial Discovery": f"""
+- List basic {service} resources and their configurations
+- Identify key parameters and settings
+- Establish baseline inventory""",
+            "Detailed Analysis": f"""
+- Analyze relationships between discovered resources
+- Gather detailed configuration and status information
+- Identify potential security or compliance issues""",
+            "Validation and Enhancement": f"""
+- Validate collected data against best practices
+- Enhance error handling and logging
+- Implement comprehensive resource filtering""",
+            "Refinement and Completion": f"""
+- Address any gaps in collected data
+- Optimize code performance and reliability
+- Ensure all error cases are handled"""
+        }
+        return goals.get(phase, "Complete remaining discovery tasks")
 
     def _extract_template(self, response: BaseMessage) -> str:
         """Extract the prompt template from the model response."""
