@@ -19,7 +19,7 @@ from pyflakes.api import check
 from pyflakes.reporter import Reporter
 
 # Local imports
-from cloud_inspector.prompts import PromptManager
+from cloud_inspector.prompts import PromptManager, PromptTemplate
 from langchain_components.models import ModelCapability, ModelRegistry
 from langchain_components.templates import GeneratedFiles
 
@@ -141,7 +141,7 @@ class CodeGenerationWorkflow:
 
     def execute(
         self,
-        prompt_template: str,
+        prompt: PromptTemplate,
         model_name: str,
         variables: dict[str, Any],
         iteration_id: Optional[str] = None,
@@ -175,7 +175,7 @@ class CodeGenerationWorkflow:
                 model = self.model_registry.get_model(model_name)
 
                 # Format prompt using PromptManager
-                messages = self.prompt_manager.format_prompt(prompt_template, variables)
+                messages = self.prompt_manager.format_prompt("", prompt, variables)
 
                 # Add context from previous results and feedback if available
                 if previous_results:
@@ -211,7 +211,7 @@ class CodeGenerationWorkflow:
                     }
 
                 result = WorkflowResult(
-                    prompt_template=prompt_template,
+                    prompt_template=prompt.template,
                     model_name=model_name,
                     timestamp=start_time,
                     execution_time=(datetime.now() - start_time).total_seconds(),
@@ -229,7 +229,7 @@ class CodeGenerationWorkflow:
 
         except Exception as e:
             result = WorkflowResult(
-                prompt_template=prompt_template,
+                prompt_template=prompt.template,
                 model_name=model_name,
                 timestamp=start_time,
                 execution_time=(datetime.now() - start_time).total_seconds(),

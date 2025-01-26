@@ -279,14 +279,16 @@ class PromptManager:
         """Get all unique tags from all prompts."""
         return {tag for prompt in self.prompts.values() for tag in prompt.tags}
 
-    def format_prompt(self, name: str, variables: dict[str, Any], supports_system_prompt: bool = True) -> list[Any]:
+    def format_prompt(self, name: str, prompt: Optional[PromptTemplate] = None, variables: Optional[dict[str, Any]] = None, supports_system_prompt: bool = True) -> list[Any]:
         """Format a prompt template with provided variables."""
-        prompt = self.get_prompt(name)
-        if not prompt:
+        if prompt is None and name:
+            prompt = self.get_prompt(name)
+        if prompt is None:
             raise ValueError(f"Prompt '{name}' not found")
 
         # Validate that all required variables are provided
         required_var_names = {var["name"] for var in prompt.variables}
+        variables = variables or {}
         provided_var_names = set(variables.keys())
         missing_vars = required_var_names - provided_var_names
 

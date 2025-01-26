@@ -106,7 +106,7 @@ class IterationManager:
         )
 
         result, output_path = self.workflow.execute(
-            prompt_template=prompt.template,  # Use dynamically generated prompt
+            prompt=prompt,
             model_name=model_name,
             variables={
                 "request": request,
@@ -206,7 +206,7 @@ class IterationManager:
         )
 
         result, output_path = self.workflow.execute(
-            prompt_template=prompt.template,  # Use dynamically generated prompt
+            prompt=prompt,
             model_name=model_name,
             variables={
                 "request": state.original_request,

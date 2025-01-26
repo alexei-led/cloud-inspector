@@ -4,11 +4,9 @@ from typing import Any, Optional
 
 import yaml
 from langchain_core.messages import BaseMessage
-from pydantic import BaseModel
 
-from cloud_inspector.prompts import CloudProvider, PromptType, PromptTemplate
+from cloud_inspector.prompts import CloudProvider, PromptTemplate
 from langchain_components.models import ModelRegistry
-
 
 
 class PromptGenerator:
@@ -87,8 +85,10 @@ The prompt should be clear, structured, and focused on the next piece of informa
         ]
 
         # Remove response_format from model kwargs
-        if hasattr(model, "model_kwargs") and "response_format" in model.model_kwargs:
-            model.model_kwargs.pop("response_format")
+        model_kwargs = getattr(model, "model_kwargs", {})
+        if "response_format" in model_kwargs:
+            model_kwargs.pop("response_format")
+            setattr(model, "model_kwargs", model_kwargs)  # noqa: B010
 
         response = model.invoke(messages)
         template = self._extract_template(response)
@@ -102,10 +102,11 @@ The prompt should be clear, structured, and focused on the next piece of informa
             tags=tags,
             cloud=cloud,
             generated_by=model_name,
-            generated_at=datetime.now().isoformat(),
+            generated_at=datetime.now(),
             # Track discovery progress using previous_results
             discovered_resources=[str(previous_results)] if previous_results else [],
             discovery_complete=(iteration > 3),  # Simple example threshold
+            history=None,
         )
 
     def _extract_template(self, response: BaseMessage) -> str:
