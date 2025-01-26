@@ -61,10 +61,10 @@ class IterationManager:
     def execute_iteration(
         self,
         model_name: str,
+        request: str,
+        cloud: CloudProvider,
+        service: str,
         request_id: Optional[str] = None,
-        request: Optional[str] = None,
-        cloud: Optional[CloudProvider] = None,
-        service: Optional[str] = None,
     ) -> tuple[str, WorkflowResult, Path]:
         """Execute an iteration, either starting new or continuing existing.
 
@@ -89,14 +89,14 @@ class IterationManager:
             state = self._load_state(request_id)
             if state.status != "in_progress":
                 raise ValueError(f"Iteration {request_id} is not in progress")
-            
+
             # Increment iteration counter
             state.current_iteration += 1
         else:
             # Start new iteration
             if not all([request, cloud, service]):
                 raise ValueError("request, cloud, and service are required for new iterations")
-            
+
             # Create new state
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             request_id = f"{service}_{timestamp}"
@@ -120,11 +120,7 @@ class IterationManager:
             latest_feedback = state.collected_data[-1].get("feedback")
 
         # Generate prompt
-        variables = [
-            {"name": "request", "value": state.original_request},
-            {"name": "service", "value": state.service},
-            {"name": "iteration", "value": str(state.current_iteration)}
-        ]
+        variables = [{"name": "request", "value": state.original_request}, {"name": "service", "value": state.service}, {"name": "iteration", "value": str(state.current_iteration)}]
         if state.current_iteration == 1:
             variables.append({"name": "region", "value": "us-west-2"})
 

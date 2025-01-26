@@ -330,6 +330,7 @@ def iterate():
 
 class CloudProviderParamType(click.ParamType):
     """Click parameter type for CloudProvider enum."""
+
     name = "cloud_provider"
 
     def convert(self, value, param, ctx):
@@ -338,8 +339,6 @@ class CloudProviderParamType(click.ParamType):
         except ValueError:
             valid_providers = [p.value for p in CloudProvider]
             self.fail(f"Invalid cloud provider '{value}'. Valid options are: {', '.join(valid_providers)}", param, ctx)
-
-
 
 
 @iterate.command()
@@ -377,8 +376,6 @@ def collect(
         click.echo(f"Error saving collected data: {e}", err=True)
 
 
-
-
 @iterate.command()
 @click.argument("request", required=False)
 @click.option("--request-id", help="ID of existing iteration to continue")
@@ -395,12 +392,12 @@ def execute(
     model: str,
 ):
     """Execute an iteration - either start new or continue existing.
-    
+
     If --request-id is provided, continues an existing iteration.
     Otherwise, starts a new iteration using the request argument and options.
     """
     manager = ctx.obj["iteration_manager"]
-    
+
     try:
         request_id, result, output_path = manager.execute_iteration(
             model_name=model,
@@ -423,6 +420,7 @@ def execute(
     except ValueError as e:
         click.echo(f"Error: {str(e)}", err=True)
         ctx.exit(1)
+
 
 @iterate.command()
 @click.argument("request_id")
