@@ -6,7 +6,7 @@ import yaml
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
-from cloud_inspector.prompts import CloudProvider, PromptType
+from cloud_inspector.prompts import CloudProvider, PromptType, PromptTemplate
 from langchain_components.models import ModelRegistry
 
 
