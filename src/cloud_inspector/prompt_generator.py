@@ -10,29 +10,6 @@ from cloud_inspector.prompts import CloudProvider, PromptType
 from langchain_components.models import ModelRegistry
 
 
-class GeneratedPrompt(BaseModel):
-    """Structure for generated prompt with discovery tracking capabilities."""
-
-    # Core prompt fields
-    service: str
-    operation: str
-    description: str
-    template: str
-    variables: list[dict[str, str]]  # Each dict has 'name' and 'description' keys
-    tags: list[str]
-    cloud: CloudProvider
-    prompt_type: PromptType = PromptType.GENERATED
-
-    # Discovery tracking
-    discovered_resources: list[dict] = []  # List of resources discovered by this prompt
-    dependencies: list[str] = []  # List of resource IDs this prompt depends on
-    next_discovery_targets: list[str] = []  # Suggested next resources to discover
-    discovery_complete: bool = False  # True if no more discoveries needed for this context
-
-    # Metadata
-    generated_by: Optional[str] = None
-    generated_at: Optional[str] = None
-
 
 class PromptGenerator:
     """Generates prompts for cloud service operations."""
@@ -64,7 +41,7 @@ class PromptGenerator:
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
         iteration: int = 1,
-    ) -> GeneratedPrompt:
+    ) -> PromptTemplate:
         """Generate a new prompt focused on iterative discovery."""
         model = self.model_registry.get_model(model_name)
 
@@ -116,7 +93,7 @@ The prompt should be clear, structured, and focused on the next piece of informa
         response = model.invoke(messages)
         template = self._extract_template(response)
 
-        return GeneratedPrompt(
+        return PromptTemplate(
             service=service,
             operation=operation,
             description=description,
@@ -127,7 +104,7 @@ The prompt should be clear, structured, and focused on the next piece of informa
             generated_by=model_name,
             generated_at=datetime.now().isoformat(),
             # Track discovery progress using previous_results
-            discovered_resources=[previous_results] if previous_results else [],
+            discovered_resources=[str(previous_results)] if previous_results else [],
             discovery_complete=(iteration > 3),  # Simple example threshold
         )
 
