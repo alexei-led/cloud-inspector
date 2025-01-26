@@ -174,6 +174,18 @@ class CodeGenerationWorkflow:
 
                 model = self.model_registry.get_model(model_name)
 
+                # Validate all variables are provided
+                missing_vars = []
+                for var in prompt.variables:
+                    if var['name'] not in variables:
+                        if var.get('value'):  # Use value from template if available
+                            variables[var['name']] = var['value']
+                        else:
+                            missing_vars.append(f"{var['name']} ({var['description']})")
+                
+                if missing_vars:
+                    raise ValueError("Missing variables:\n" + "\n".join(f"- {var}" for var in missing_vars))
+
                 # Format prompt using PromptManager
                 messages = self.prompt_manager.format_prompt("", prompt, variables)
 

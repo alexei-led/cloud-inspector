@@ -173,9 +173,20 @@ The prompt should be clear, structured, and focused on the current phase goals."
             # Parse YAML content
             data = yaml.safe_load(content)
 
-            # Extract the template
+            # Extract template and variables
             template = data.get("template", "").strip()
-
-            return template
+            
+            # Parse any new variables from response
+            new_vars = []
+            for var in data.get('variables', []):
+                if isinstance(var, dict) and 'name' in var and 'description' in var:
+                    new_vars.append({
+                        'name': var['name'],
+                        'description': var['description'],
+                        'value': var.get('default_value', '')
+                    })
+            
+            # Merge new variables with existing ones
+            return template, new_vars
         except Exception as e:
             raise ValueError(f"Failed to extract template from model response: {e}") from e
