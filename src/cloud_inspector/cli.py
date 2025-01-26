@@ -340,25 +340,6 @@ class CloudProviderParamType(click.ParamType):
             self.fail(f"Invalid cloud provider '{value}'. Valid options are: {', '.join(valid_providers)}", param, ctx)
 
 
-@iterate.command()
-@click.argument("request")
-@click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider.")
-@click.option("--service", help="Name of the service to interact with.")
-@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
-@click.pass_context
-def start(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str):
-    """Start a new iteration process."""
-    manager = ctx.obj["iteration_manager"]
-    request_id, result, output_path = manager.start_iteration(request, cloud, service, model)
-
-    click.echo(f"\nStarted iteration process: {request_id}")
-    if result.generated_files:
-        click.echo("\nGenerated files:")
-        for filename, _content in result.generated_files.items():
-            click.echo(f"- {filename}")
-        click.echo(f"\nFiles saved to: {output_path}")
-    else:
-        click.echo("No files were generated")
 
 
 @iterate.command()
@@ -396,29 +377,52 @@ def collect(
         click.echo(f"Error saving collected data: {e}", err=True)
 
 
+
+
 @iterate.command()
-@click.argument("request_id")
-@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
+@click.argument("request", required=False)
+@click.option("--request-id", help="ID of existing iteration to continue")
+@click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider (for new iterations)")
+@click.option("--service", help="Name of the service to interact with (for new iterations)")
+@click.option("--model", default="gpt-4o", help="Name of the LLM model to use")
 @click.pass_context
-def next(ctx: click.Context, request_id: str, model: str):
-    """Start next iteration for data collection."""
+def execute(
+    ctx: click.Context,
+    request: Optional[str],
+    request_id: Optional[str],
+    cloud: Optional[CloudProvider],
+    service: Optional[str],
+    model: str,
+):
+    """Execute an iteration - either start new or continue existing.
+    
+    If --request-id is provided, continues an existing iteration.
+    Otherwise, starts a new iteration using the request argument and options.
+    """
     manager = ctx.obj["iteration_manager"]
-    result = manager.next_iteration(request_id, model)
+    
+    try:
+        request_id, result, output_path = manager.execute_iteration(
+            model_name=model,
+            request_id=request_id,
+            request=request,
+            cloud=cloud,
+            service=service,
+        )
 
-    if result:
-        workflow_result, output_path = result
-        click.echo(f"Started next iteration for {request_id}")
-        if workflow_result.generated_files:
-            click.echo("\nGenerated files:")
-            for filename, content in workflow_result.generated_files.items():
-                click.echo(f"\n{filename}:")
-                click.echo(content)
-            click.echo(f"\nFiles saved to: {output_path}")
-        else:
-            click.echo("No files were generated")
-    else:
-        click.echo("No more iterations needed or request ID not found")
-
+        # Show results
+        if request_id:
+            click.echo(f"\nIteration process: {request_id}")
+            if result.generated_files:
+                click.echo("\nGenerated files:")
+                for filename, _content in result.generated_files.items():
+                    click.echo(f"- {filename}")
+                click.echo(f"\nFiles saved to: {output_path}")
+            else:
+                click.echo("No files were generated")
+    except ValueError as e:
+        click.echo(f"Error: {str(e)}", err=True)
+        ctx.exit(1)
 
 @iterate.command()
 @click.argument("request_id")
