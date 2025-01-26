@@ -80,14 +80,17 @@ User Feedback:
 Variables:
 {vars_formatted}
 
-=== REQUIRED VARIABLES ===
+=== VARIABLES ===
 The generated prompt should specify any additional variables needed for code generation.
-Format: YAML list under 'required_variables' with 'name' and 'description' fields.
+Format: YAML list under 'variables' with fields:
+- name: Variable name
+- description: What the variable is used for
+- default_value: Optional default value
 
 === OUTPUT FORMAT ===
 Return a YAML document containing:
 1. 'template' field with your generated prompt
-2. 'required_variables' field listing any new variables needed
+2. 'variables' field listing any new variables needed
 3. 'completion_criteria' field describing what defines success for this iteration
 
 The prompt should be clear, structured, and focused on the current phase goals."""

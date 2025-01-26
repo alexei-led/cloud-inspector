@@ -130,12 +130,6 @@ class PromptHistory(BaseModel):
     latest_iteration: int = Field(default=0)
 
 
-class RequiredVariable(BaseModel):
-    """Definition of a required variable."""
-    name: str = Field(..., description="Name of the variable")
-    description: str = Field(..., description="Description of what the variable is used for")
-    default_value: Optional[str] = Field(None, description="Optional default value")
-
 class PromptTemplate(BaseModel):
     """Single prompt template definition."""
 
@@ -143,8 +137,7 @@ class PromptTemplate(BaseModel):
     operation: str = Field(..., description="Operation type (e.g., list, analyze)")
     description: str = Field(..., description="Brief description of what the prompt does")
     template: str = Field(..., description="The actual prompt template")
-    variables: list[dict[str, str]] = Field(default_factory=list, description="list of variables with name and description")
-    required_variables: list[RequiredVariable] = Field(default_factory=list, description="List of additional variables required by the template")
+    variables: list[dict[str, str]] = Field(default_factory=list, description="List of variables with name, description and optional default value")
     tags: list[str] = Field(default_factory=list, description="Tags for categorization")
     cloud: CloudProvider = Field(..., description="Cloud provider")
     prompt_type: Optional[PromptType] = Field(
