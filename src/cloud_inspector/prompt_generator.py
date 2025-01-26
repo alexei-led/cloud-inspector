@@ -106,7 +106,7 @@ The prompt should be clear, structured, and focused on the next piece of informa
                 "role": "system",
                 "content": system_prompt,
             },
-            {"role": "user", "content": f"Operation: {operation}"},
+            {"role": "user", "content": f"Request: {description}\nOperation: {operation}"},
         ]
 
         # Remove response_format from model kwargs
