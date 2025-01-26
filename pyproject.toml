@@ -33,7 +33,7 @@ dependencies = [
 cloud-inspector = "cloud_inspector.cli:cli"
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "pytest-cov", "setuptools"]
+dev = ["aider-chat", "flask", "pytest", "pytest-cov", "ruff", "setuptools"]
 
 [tool.ruff]
 line-length = 240
