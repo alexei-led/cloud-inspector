@@ -58,66 +58,106 @@ class IterationManager:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.sandbox = DockerSandbox()
 
-    def start_iteration(
+    def execute_iteration(
         self,
-        request: str,
-        cloud: CloudProvider,
-        service: str,
         model_name: str,
+        request_id: Optional[str] = None,
+        request: Optional[str] = None,
+        cloud: Optional[CloudProvider] = None,
+        service: Optional[str] = None,
     ) -> tuple[str, WorkflowResult, Path]:
-        """Start a new iteration process.
+        """Execute an iteration, either starting new or continuing existing.
 
         Args:
-            request: The user's original request
-            service: The AWS service to inspect
             model_name: Name of the model to use
+            request_id: Optional ID of existing iteration process
+            request: Required for new iterations - the user's original request
+            cloud: Required for new iterations - the cloud provider
+            service: Required for new iterations - the service to inspect
 
         Returns:
             A tuple containing:
             - request_id: Unique identifier for this iteration process
             - result: The workflow execution result
             - output_path: Path where the generated files are saved
+
+        Raises:
+            ValueError: If parameters are invalid for new/existing iteration
         """
-        # Create request ID and iteration state
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        request_id = f"{service}_{timestamp}"
+        if request_id:
+            # Continue existing iteration
+            state = self._load_state(request_id)
+            if state.status != "in_progress":
+                raise ValueError(f"Iteration {request_id} is not in progress")
+            
+            # Increment iteration counter
+            state.current_iteration += 1
+        else:
+            # Start new iteration
+            if not all([request, cloud, service]):
+                raise ValueError("request, cloud, and service are required for new iterations")
+            
+            # Create new state
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            request_id = f"{service}_{timestamp}"
+            state = IterationState(
+                request_id=request_id,
+                original_request=request,
+                cloud=cloud,
+                service=service,
+                current_iteration=1,
+                collected_data=[],
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            )
 
-        state = IterationState(
-            request_id=request_id,
-            original_request=request,
-            cloud=cloud,
-            service=service,
-            current_iteration=1,
-            collected_data=[],
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-        )
+        # Aggregate previous data and feedback if any
+        aggregated_data = {}
+        latest_feedback = None
+        if state.collected_data:
+            for collected in state.collected_data:
+                aggregated_data.update(collected["data"])
+            latest_feedback = state.collected_data[-1].get("feedback")
 
-        # Generate initial code based on the request
+        # Generate prompt
+        variables = [
+            {"name": "request", "value": state.original_request},
+            {"name": "service", "value": state.service},
+            {"name": "iteration", "value": str(state.current_iteration)}
+        ]
+        if state.current_iteration == 1:
+            variables.append({"name": "region", "value": "us-west-2"})
+
         prompt = self.prompt_generator.generate_prompt(
             model_name=model_name,
-            cloud=cloud,
-            service=service,
+            cloud=state.cloud,
+            service=state.service,
             operation="inspect",
-            description=request,
-            variables=[{"name": "region", "value": "us-west-2"}],
-            tags=["cloud_inspection", service],
-            iteration=1,
+            description=state.original_request,
+            variables=variables,
+            tags=["cloud_inspection", state.service],
+            previous_results=aggregated_data if aggregated_data else None,
+            feedback=latest_feedback,
+            iteration=state.current_iteration,
         )
 
+        # Execute workflow
         result, output_path = self.workflow.execute(
             prompt=prompt,
             model_name=model_name,
             variables={
-                "request": request,
-                "service": service,
-                "iteration": 1,
+                "request": state.original_request,
+                "service": state.service,
+                "iteration": state.current_iteration,
             },
             iteration_id=request_id,
-            iteration_number=1,
+            iteration_number=state.current_iteration,
+            previous_results=aggregated_data if aggregated_data else None,
+            feedback=latest_feedback,
         )
 
-        # Save state
+        # Update and save state
+        state.updated_at = datetime.now()
         self._save_state(state)
 
         return request_id, result, output_path
@@ -157,73 +197,6 @@ class IterationManager:
         data_file = self.data_dir / f"{collected.iteration_id}_data.json"
         with open(data_file, "w") as f:
             json.dump(processed_data, f, indent=2)
-
-    def next_iteration(
-        self,
-        request_id: str,
-        model_name: str,
-    ) -> Optional[tuple[WorkflowResult, Path]]:
-        """Start the next iteration if needed.
-
-        Args:
-            request_id: ID of the iteration process
-            model_name: Name of the model to use
-
-        Returns:
-            If iteration continues:
-                tuple containing the workflow result and output path
-            If iteration is complete or invalid:
-                None
-        """
-        state = self._load_state(request_id)
-
-        # Check if we should continue
-        if state.status != "in_progress":
-            return None
-
-        # Increment iteration counter
-        state.current_iteration += 1
-
-        # Aggregate all collected data
-        aggregated_data = {}
-        for collected in state.collected_data:
-            aggregated_data.update(collected["data"])
-
-        # Get latest feedback
-        latest_feedback = state.collected_data[-1].get("feedback") if state.collected_data else None
-
-        # Generate next code using dynamically generated prompt
-        prompt = self.prompt_generator.generate_prompt(
-            model_name=model_name,
-            cloud=state.cloud,
-            service=state.service,
-            operation="inspect",
-            description=state.original_request,
-            variables=[{"name": "request", "value": state.original_request}, {"name": "service", "value": state.service}, {"name": "iteration", "value": str(state.current_iteration)}],
-            tags=["cloud_inspection", state.service],
-            previous_results=aggregated_data,
-            feedback=latest_feedback,
-        )
-
-        result, output_path = self.workflow.execute(
-            prompt=prompt,
-            model_name=model_name,
-            variables={
-                "request": state.original_request,
-                "service": state.service,
-                "iteration": state.current_iteration,
-            },
-            iteration_id=request_id,
-            iteration_number=state.current_iteration,
-            previous_results=aggregated_data,
-            feedback=latest_feedback,
-        )
-
-        # Update state
-        state.updated_at = datetime.now()
-        self._save_state(state)
-
-        return result, output_path
 
     def complete_iteration(
         self,
