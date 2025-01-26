@@ -10,7 +10,7 @@ import click
 
 from cloud_inspector.iteration_manager import IterationManager
 from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import PromptManager, PromptType
+from cloud_inspector.prompts import CloudProvider, PromptManager, PromptType
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
 from langchain_components.models import ModelRegistry
 
@@ -328,22 +328,34 @@ def iterate():
     pass
 
 
+class CloudProviderParamType(click.ParamType):
+    """Click parameter type for CloudProvider enum."""
+    name = "cloud_provider"
+
+    def convert(self, value, param, ctx):
+        try:
+            return CloudProvider(value.lower())
+        except ValueError:
+            valid_providers = [p.value for p in CloudProvider]
+            self.fail(f"Invalid cloud provider '{value}'. Valid options are: {', '.join(valid_providers)}", param, ctx)
+
+
 @iterate.command()
 @click.argument("request")
-@click.argument("service")
-@click.option("--model", default="gpt-4", help="Name of the LLM model to use.")
+@click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider.")
+@click.option("--service", help="Name of the service to interact with.")
+@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
 @click.pass_context
-def start(ctx: click.Context, request: str, service: str, model: str):
+def start(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str):
     """Start a new iteration process."""
     manager = ctx.obj["iteration_manager"]
-    request_id, result, output_path = manager.start_iteration(request, service, model)
+    request_id, result, output_path = manager.start_iteration(request, cloud, service, model)
 
     click.echo(f"\nStarted iteration process: {request_id}")
     if result.generated_files:
         click.echo("\nGenerated files:")
-        for filename, content in result.generated_files.items():
-            click.echo(f"\n{filename}:")
-            click.echo(content)
+        for filename, _content in result.generated_files.items():
+            click.echo(f"- {filename}")
         click.echo(f"\nFiles saved to: {output_path}")
     else:
         click.echo("No files were generated")
@@ -386,7 +398,7 @@ def collect(
 
 @iterate.command()
 @click.argument("request_id")
-@click.option("--model", default="gpt-4", help="Name of the LLM model to use.")
+@click.option("--model", default="gpt-4o", help="Name of the LLM model to use.")
 @click.pass_context
 def next(ctx: click.Context, request_id: str, model: str):
     """Start next iteration for data collection."""

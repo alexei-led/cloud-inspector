@@ -44,6 +44,14 @@ class PromptGenerator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.history_dir.mkdir(parents=True, exist_ok=True)
 
+    def _format_data(self, data: Any) -> str:
+        """Format data appropriately based on its type."""
+        if not data:
+            return "None"
+        if isinstance(data, (dict, list)):
+            return yaml.dump(data, default_flow_style=False, sort_keys=False)
+        return str(data)
+
     def generate_prompt(
         self,
         model_name: str,
@@ -55,31 +63,60 @@ class PromptGenerator:
         cloud: CloudProvider = CloudProvider.AWS,
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
+        iteration: int = 1,
     ) -> GeneratedPrompt:
-        """Generate a new prompt."""
+        """Generate a new prompt focused on iterative discovery."""
         model = self.model_registry.get_model(model_name)
 
-        # Build context from previous results and feedback if available
-        context = ""
-        if previous_results:
-            context += "\nPrevious execution results:\n" + yaml.dump(previous_results)
-        if feedback:
-            context += "\nUser feedback:\n" + yaml.dump(feedback)
+        # Format variables as simple name-value pairs
+        vars_formatted = "\n".join(f"  {v['name']}: {v['value']}" for v in variables)
 
-        # Generate the prompt template
+        system_prompt = f"""You are an expert prompt engineer specializing in creating prompts for code generation.
+Your task is to create a prompt that will be used by another AI model to generate Python code for cloud operations.
+
+The prompt you create should guide the code generation model to:
+1. Focus on the specific cloud operation needed
+2. Consider previously discovered data
+3. Generate precise, secure, and efficient code
+4. Include proper error handling and logging
+5. Return structured data that can be used in subsequent iterations
+
+=== CONTEXT ===
+Original Request: {description}
+Cloud Service: {cloud.value} {service}
+Operation: {operation}
+Current Iteration: {iteration}
+
+=== STATE ===
+Previously Discovered Data:
+{self._format_data(previous_results)}
+
+User Feedback:
+{self._format_data(feedback)}
+
+Variables:
+{vars_formatted}
+
+=== OUTPUT FORMAT ===
+Return a YAML document containing only a 'template' field with your generated prompt.
+The prompt should be clear, structured, and focused on the next piece of information to discover."""
+
         messages = [
             {
                 "role": "system",
-                "content": f"You are an expert prompt engineer. Generate a prompt template for AWS service: {service}, operation: {operation}.\n{context}",
+                "content": system_prompt,
             },
-            {"role": "user", "content": f"Description: {description}\nRequired variables: {variables}"},
+            {"role": "user", "content": f"Operation: {operation}"},
         ]
+
+        # Remove response_format from model kwargs
+        if hasattr(model, "model_kwargs") and "response_format" in model.model_kwargs:
+            model.model_kwargs.pop("response_format")
 
         response = model.invoke(messages)
         template = self._extract_template(response)
 
-        # Create the prompt
-        prompt = GeneratedPrompt(
+        return GeneratedPrompt(
             service=service,
             operation=operation,
             description=description,
@@ -89,9 +126,10 @@ class PromptGenerator:
             cloud=cloud,
             generated_by=model_name,
             generated_at=datetime.now().isoformat(),
+            # Track discovery progress using previous_results
+            discovered_resources=[previous_results] if previous_results else [],
+            discovery_complete=(iteration > 3),  # Simple example threshold
         )
-
-        return prompt
 
     def _extract_template(self, response: BaseMessage) -> str:
         """Extract the prompt template from the model response."""

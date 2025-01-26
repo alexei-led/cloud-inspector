@@ -23,6 +23,8 @@ from cloud_inspector.prompts import PromptManager
 from langchain_components.models import ModelCapability, ModelRegistry
 from langchain_components.templates import GeneratedFiles
 
+from .execution import DockerSandbox
+
 
 @dataclass
 class WorkflowResult:
@@ -74,6 +76,7 @@ class CodeGenerationWorkflow:
         self.model_registry = model_registry
         self.project_name = project_name
         self.output_dir = output_dir or Path("generated_code")
+        self.sandbox = DockerSandbox()
 
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -238,6 +241,28 @@ class CodeGenerationWorkflow:
             output_dir = self._save_result(result)
             raise e
 
+    def execute_generated_code(
+        self,
+        code: str,
+        aws_credentials: Optional[dict[str, str]] = None,
+    ) -> dict[str, Any]:
+        """Execute generated code in sandbox.
+
+        Args:
+            code: Generated Python code
+            aws_credentials: Optional AWS credentials
+
+        Returns:
+            Execution results
+        """
+        success, stdout, stderr = self.sandbox.execute(code, aws_credentials)
+
+        return {
+            "stdout": stdout,
+            "stderr": stderr,
+            "success": success,
+        }
+
     def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
         decoded = bytes(model_response.encode("utf-8").decode("unicode-escape").encode("utf-8")).decode("utf-8")
@@ -328,6 +353,11 @@ class CodeGenerationWorkflow:
             )
 
         return run_dir
+
+    def cleanup(self):
+        """Cleanup resources."""
+        if hasattr(self, "sandbox"):
+            self.sandbox.cleanup()
 
 
 class WorkflowManager:
