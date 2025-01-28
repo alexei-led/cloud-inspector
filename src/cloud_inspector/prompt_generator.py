@@ -50,18 +50,17 @@ class PromptGenerator:
         iteration_phase = self._get_iteration_phase(iteration, previous_results)
         iteration_goals = self._get_iteration_goals(iteration_phase, service, operation)
 
+        next_focus = self._determine_next_focus(previous_results, service, operation)
+
         system_prompt = f"""You are an expert prompt engineer specializing in cloud infrastructure.
-Your task is to create a clear, detailed prompt that will guide another AI model in generating cloud infrastructure artifacts including:
-- The Python script (main.py)
-- Required dependencies (requirements.txt)
-- IAM policies and permissions (policy.json)
+Your task is to create a clear, detailed prompt that will guide another AI model in generating focused code for discovering specific cloud infrastructure information.
 
 The prompt you create should help the code generation model understand:
-1. The specific cloud resources and operations needed
+1. The NEXT specific piece of information to discover
 2. Context from previously discovered information
-3. Security and compliance requirements
-4. Required inputs and outputs
-5. Dependencies and relationships between resources
+3. How to use the context to guide the next discovery step
+4. Required inputs for this specific discovery step
+5. Expected output format for the discovered information
 
 === CONTEXT ===
 Original Request: {description}
@@ -69,6 +68,7 @@ Cloud Service: {cloud.value} {service}
 Operation: {operation}
 Current Iteration: {iteration}
 Phase: {iteration_phase}
+Next Focus: {next_focus}
 
 === GOALS ===
 {iteration_goals}
@@ -135,6 +135,20 @@ The prompt should be clear, structured, and focused on the current phase goals."
             history=None,
         )
 
+    def _determine_next_focus(self, previous_results: Optional[dict[str, Any]], service: str, operation: str) -> str:
+        """Determine what should be the next focus area based on previous discoveries."""
+        if not previous_results:
+            return "Initial basic configuration"
+
+        # Add service-specific logic for determining next focus
+        if service == "s3":
+            if "trigger_config" in previous_results and "function_name" in previous_results.get("trigger_config", {}):
+                return "Lambda function configuration"
+            elif "bucket_name" in previous_results and "trigger_config" not in previous_results:
+                return "Bucket trigger configuration"
+
+        return "Next logical configuration based on previous findings"
+
     def _get_iteration_phase(self, iteration: int, previous_results: Optional[dict[str, Any]]) -> str:
         """Determine the current iteration phase based on progress."""
         phases = {1: "Initial Discovery", 2: "Detailed Analysis", 3: "Validation and Enhancement"}
@@ -144,21 +158,21 @@ The prompt should be clear, structured, and focused on the current phase goals."
         """Get specific goals for the current iteration phase."""
         goals = {
             "Initial Discovery": f"""
-- List basic {service} resources and their configurations
-- Identify key parameters and settings
-- Establish baseline inventory""",
+- Identify the FIRST most relevant piece of information to check
+- Focus on a single, specific aspect of {service}
+- Keep the discovery logic simple and focused""",
             "Detailed Analysis": """
-- Analyze relationships between discovered resources
-- Gather detailed configuration and status information
-- Identify potential security or compliance issues""",
+- Use previously discovered information to determine the next logical check
+- Focus on one specific relationship or configuration
+- Keep the scope narrow and targeted""",
             "Validation and Enhancement": """
-- Validate collected data against best practices
-- Enhance error handling and logging
-- Implement comprehensive resource filtering""",
+- Validate the specific piece of information discovered
+- Determine if additional context is needed
+- Identify the next most relevant check based on findings""",
             "Refinement and Completion": """
-- Address any gaps in collected data
-- Optimize code performance and reliability
-- Ensure all error cases are handled""",
+- Focus on any remaining critical pieces of information
+- Keep each discovery step isolated and simple
+- Ensure clear error handling for this specific check""",
         }
         return goals.get(phase, "Complete remaining discovery tasks")
 
