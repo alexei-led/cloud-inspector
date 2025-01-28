@@ -34,16 +34,31 @@ class DockerSandbox:
         self.cpu_limit = cpu_limit
         self.memory_limit = memory_limit
         self.timeout = timeout
-        self.docker = docker.from_env()
-        self._ensure_image()
+        self.docker = None
 
     def _ensure_image(self):
         """Ensure Docker image is available."""
         try:
-            self.docker.images.get(self.image)
+            self.docker.images.get(self.image) if self.docker else None
         except DockerException:
             logger.info(f"Pulling image {self.image}")
-            self.docker.images.pull(self.image)
+            self.docker.images.pull(self.image) if self.docker else None
+
+    def _init_docker(self) -> bool:
+        """Initialize Docker client and ensure image is available.
+
+        Returns:
+            bool: True if Docker is available and initialized successfully
+        """
+        if self.docker is None:
+            try:
+                self.docker = docker.from_env()
+                self._ensure_image()
+                return True
+            except DockerException as e:
+                logger.error(f"Failed to initialize Docker: {e}")
+                return False
+        return True
 
     def execute(
         self,
@@ -59,6 +74,9 @@ class DockerSandbox:
         Returns:
             Tuple of (success, stdout, stderr)
         """
+        if not self._init_docker():
+            return False, "", "Docker is not available"
+
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -76,7 +94,7 @@ class DockerSandbox:
 
             # Create and run container
             try:
-                container = self.docker.containers.create(
+                container = self.docker.containers.create(  # type: ignore
                     self.image,
                     command=["python", "/code/code.py"],
                     volumes={str(temp_path.absolute()): {"bind": "/code", "mode": "ro"}},
@@ -112,7 +130,7 @@ class DockerSandbox:
     def cleanup(self):
         """Cleanup any leftover containers."""
         try:
-            containers = self.docker.containers.list(all=True, filters={"ancestor": self.image})
+            containers = self.docker.containers.list(all=True, filters={"ancestor": self.image})  # type: ignore
             for container in containers:
                 try:
                     container.remove(force=True)
