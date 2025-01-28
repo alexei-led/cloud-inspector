@@ -50,15 +50,18 @@ class PromptGenerator:
         iteration_phase = self._get_iteration_phase(iteration, previous_results)
         iteration_goals = self._get_iteration_goals(iteration_phase, service, operation)
 
-        system_prompt = f"""You are an expert prompt engineer specializing in creating prompts for code generation.
-Your task is to create a prompt that will be used by another AI model to generate Python code for cloud operations.
+        system_prompt = f"""You are an expert prompt engineer specializing in cloud infrastructure.
+Your task is to create a clear, detailed prompt that will guide another AI model in generating cloud infrastructure artifacts including:
+- The Python script (main.py)
+- Required dependencies (requirements.txt)
+- IAM policies and permissions (policy.json)
 
-The prompt you create should guide the code generation model to:
-1. Focus on the specific cloud operation needed
-2. Consider previously discovered data
-3. Generate precise, secure, and efficient code
-4. Include proper error handling and logging
-5. Return structured data that can be used in subsequent iterations
+The prompt you create should help the code generation model understand:
+1. The specific cloud resources and operations needed
+2. Context from previously discovered information
+3. Security and compliance requirements
+4. Required inputs and outputs
+5. Dependencies and relationships between resources
 
 === CONTEXT ===
 Original Request: {description}
@@ -85,7 +88,7 @@ The generated prompt should specify any additional variables needed for code gen
 Format: YAML list under 'variables' with fields:
 - name: Variable name
 - description: What the variable is used for
-- default_value: Optional default value
+- value: Value or default value
 
 === OUTPUT FORMAT ===
 Return a YAML document containing:
@@ -112,12 +115,16 @@ The prompt should be clear, structured, and focused on the current phase goals."
         response = model.invoke(messages)
         template, new_variables = self._extract_template(response)
 
+        # Merge existing variables with new ones, avoiding duplicates by name
+        existing_var_names = {v["name"] for v in variables}
+        merged_variables = variables + [v for v in new_variables if v["name"] not in existing_var_names]
+
         return PromptTemplate(
             service=service,
             operation=operation,
             description=description,
             template=template,
-            variables=new_variables,
+            variables=merged_variables,  # Use merged variables here
             tags=tags,
             cloud=cloud,
             generated_by=model_name,

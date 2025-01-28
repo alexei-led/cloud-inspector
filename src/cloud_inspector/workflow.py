@@ -36,7 +36,6 @@ class WorkflowResult:
     execution_time: float
     success: bool
     iteration_id: Optional[str] = None
-    iteration_number: Optional[int] = None
     run_id: Optional[str] = None
     error: Optional[str] = None
     generated_files: Optional[dict[str, str]] = None
@@ -145,7 +144,6 @@ class CodeGenerationWorkflow:
         model_name: str,
         variables: dict[str, Any],
         iteration_id: Optional[str] = None,
-        iteration_number: Optional[int] = None,
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
     ) -> tuple[WorkflowResult, Path]:
@@ -156,7 +154,6 @@ class CodeGenerationWorkflow:
             model_name: Name of the model to use for code generation
             variables: Variables to inject into the prompt (request, service, iteration)
             iteration_id: Optional ID to track this iteration
-            iteration_number: Optional iteration number for this request
             previous_results: Optional dict containing data discovered in previous iterations
             feedback: Optional dict containing user feedback/direction for this iteration
         """
@@ -229,7 +226,6 @@ class CodeGenerationWorkflow:
                     execution_time=(datetime.now() - start_time).total_seconds(),
                     success=True,
                     iteration_id=iteration_id,
-                    iteration_number=iteration_number,
                     run_id=str(runs_cb.traced_runs[0].id),
                     generated_files=generated_files,
                     execution_results=previous_results,
@@ -248,7 +244,6 @@ class CodeGenerationWorkflow:
                 success=False,
                 error=str(e),
                 iteration_id=iteration_id,
-                iteration_number=iteration_number,
             )
             output_dir = self._save_result(result)
             raise e
@@ -326,7 +321,7 @@ class CodeGenerationWorkflow:
         """Save workflow result to file."""
         # Create timestamp-based filename
         timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
-        base_name = f"{result.prompt_template}_{result.model_name}_{timestamp}"
+        base_name = f"{result.model_name}_{timestamp}"
 
         # Create a directory for this run
         run_dir = self.output_dir / base_name
@@ -356,7 +351,6 @@ class CodeGenerationWorkflow:
                     "error": result.error,
                     "run_id": str(result.run_id) if result.run_id else None,
                     "iteration_id": str(result.iteration_id) if result.iteration_id else None,
-                    "iteration_number": str(result.iteration_number) if result.iteration_number else None,
                     "execution_results": result.execution_results,
                     "feedback": result.feedback,
                 },

@@ -1,5 +1,6 @@
 """Command-line interface for Cloud Inspector."""
 
+import dis
 import json
 import logging
 from datetime import datetime
@@ -8,7 +9,7 @@ from typing import Optional
 
 import click
 
-from cloud_inspector.iteration_manager import IterationManager
+from cloud_inspector.discovery_manager import DiscoveryManager
 from cloud_inspector.prompt_generator import PromptGenerator
 from cloud_inspector.prompts import CloudProvider, PromptManager, PromptType
 from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
@@ -62,7 +63,7 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
     )
     ctx.obj["workflow_manager"] = WorkflowManager()
     ctx.obj["prompt_generator"] = PromptGenerator(model_registry=ctx.obj["registry"])
-    ctx.obj["iteration_manager"] = IterationManager(ctx.obj["prompt_manager"], ctx.obj["workflow"], ctx.obj["prompt_generator"])
+    ctx.obj["discovery_manager"] = DiscoveryManager(prompt_manager=ctx.obj["prompt_manager"], workflow=ctx.obj["workflow"], prompt_generator=ctx.obj["prompt_generator"])
 
 
 # Prompt Management Commands
@@ -292,9 +293,9 @@ def list_code_results(
     start: Optional[datetime],
     end: Optional[datetime],
 ):
-    """List code generation results from iterations."""
-    iteration_manager = ctx.obj["iteration_manager"]
-    results = iteration_manager.list_results(prompt=prompt, model=model, start_time=start, end_time=end)
+    """List code generation results from discovery process."""
+    discovery_manager = ctx.obj["discovery_manager"]
+    results = discovery_manager.list_results(prompt=prompt, model=model, start_time=start, end_time=end)
 
     if not results:
         click.echo("No code generation results found.")
@@ -323,8 +324,8 @@ def list_code_results(
 
 
 @cli.group()
-def iterate():
-    """Manage iterative data collection process."""
+def discovery():
+    """Manage cloud resource discovery process."""
     pass
 
 
@@ -341,7 +342,7 @@ class CloudProviderParamType(click.ParamType):
             self.fail(f"Invalid cloud provider '{value}'. Valid options are: {', '.join(valid_providers)}", param, ctx)
 
 
-@iterate.command()
+@discovery.command()
 @click.argument("request_id")
 @click.argument("data_file", type=click.Path(exists=True))
 @click.option("--source", multiple=True, help="Source files used to collect data.")
@@ -355,17 +356,10 @@ def collect(
     feedback: Optional[str],
 ) -> None:
     """Save collected data from manual code execution."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    workflow = ctx.obj["workflow"]
-    prompt_generator = ctx.obj["prompt_generator"]
-    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
-
+    discovery_manager = ctx.obj["discovery_manager"]
     try:
-        # Parse feedback if provided
         feedback_dict = json.loads(feedback) if feedback else None
-
-        # Save collected data
-        iteration_manager.save_collected_data(
+        discovery_manager.save_collected_data(
             request_id,
             Path(data_file),
             list(source),
@@ -376,7 +370,7 @@ def collect(
         click.echo(f"Error saving collected data: {e}", err=True)
 
 
-@iterate.command()
+@discovery.command()
 @click.argument("request", required=False)
 @click.option("--request-id", help="ID of existing iteration to continue")
 @click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider (for new iterations)")
@@ -391,15 +385,15 @@ def execute(
     service: Optional[str],
     model: str,
 ):
-    """Execute an iteration - either start new or continue existing.
+    """Execute a discovery - either start new or continue existing.
 
-    If --request-id is provided, continues an existing iteration.
-    Otherwise, starts a new iteration using the request argument and options.
+    If --request-id is provided, continues an existing discovery.
+    Otherwise, starts a new discovery using the request argument and options.
     """
-    manager = ctx.obj["iteration_manager"]
+    manager = ctx.obj["discovery_manager"]
 
     try:
-        request_id, result, output_path = manager.execute_iteration(
+        request_id, result, output_path = manager.execute_discovery(
             model_name=model,
             request_id=request_id,
             request=request,
@@ -422,36 +416,28 @@ def execute(
         ctx.exit(1)
 
 
-@iterate.command()
+@discovery.command()
 @click.argument("request_id")
 @click.argument("reason")
 @click.pass_context
 def complete(ctx: click.Context, request_id: str, reason: str) -> None:
     """Mark an iteration process as complete."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    workflow = ctx.obj["workflow"]
-    prompt_generator = ctx.obj["prompt_generator"]
-    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
-
+    discovery_manager = ctx.obj["discovery_manager"]
     try:
-        iteration_manager.complete_iteration(request_id, reason)
+        discovery_manager.complete_discovery(request_id, reason)
         click.echo(f"Marked {request_id} as complete: {reason}")
     except Exception as e:
         click.echo(f"Error completing iteration: {e}", err=True)
 
 
-@iterate.command()
+@discovery.command()
 @click.argument("request_id")
 @click.pass_context
 def show(ctx: click.Context, request_id: str) -> None:
     """Show collected data for a request."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    workflow = ctx.obj["workflow"]
-    prompt_generator = ctx.obj["prompt_generator"]
-    iteration_manager = IterationManager(prompt_manager, workflow, prompt_generator)
-
+    discovery_manager = ctx.obj["discovery_manager"]
     try:
-        data = iteration_manager.get_collected_data(request_id)
+        data = discovery_manager.get_discovered_data(request_id)
         click.echo(json.dumps(data, indent=2, cls=DateTimeEncoder))
     except Exception as e:
         click.echo(f"Error showing collected data: {e}", err=True)
