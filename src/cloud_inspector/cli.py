@@ -8,7 +8,8 @@ from typing import Optional
 import click
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
-from cloud_inspector.discovery_manager import DiscoveryManager
+from cloud_inspector.orchestration.agent import OrchestrationAgent
+from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
 from components.models import ModelRegistry
 from components.types import CloudProvider
@@ -56,7 +57,10 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
     ctx.obj["registry"] = model_registry
     code_generator = CodeGeneratorAgent(model_registry)
     prompt_generator = PromptGeneratorAgent(model_registry)
-    ctx.obj["discovery_manager"] = DiscoveryManager(code_generator=code_generator, prompt_generator=prompt_generator)
+    code_executor = CodeExecutionAgent()
+    ctx.obj["code_generator"] = code_generator
+    ctx.obj["prompt_generator"] = prompt_generator
+    ctx.obj["code_executor"] = code_executor
 
 
 # Models Commands
@@ -108,43 +112,37 @@ class CloudProviderParamType(click.ParamType):
 
 
 @discovery.command()
-@click.argument("request", required=True, help="User request that triggered the discovery")
-@click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider (for new iterations)")
-@click.option("--service", help="Name of the service to interact with (for new iterations)")
-@click.option("--model", default="gpt-4o-mini", help="Name of the LLM model to use")
+@click.argument("request", required=True)
+@click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS)
+@click.option("--service", required=True)
+@click.option("--model", default="gpt-4-turbo")
+@click.option("--thread-id", required=True)
 @click.pass_context
 def execute(
     ctx: click.Context,
     request: str,
     cloud: CloudProvider,
-    service: Optional[str],
+    service: str,
     model: str,
+    thread_id: str,
 ):
-    """Execute a discovery - either start new or continue existing.
-
-    If --request-id is provided, continues an existing discovery.
-    Otherwise, starts a new discovery using the request argument and options.
-    """
-    manager = ctx.obj["discovery_manager"]
-
+    """Execute cloud inspection workflow."""
+    agent = OrchestrationAgent(
+        code_generator=ctx.obj["code_generator"],
+        prompt_generator=ctx.obj["prompt_generator"],
+        code_executor=ctx.obj["code_executor"],
+        model_name=model
+    )
+    
     try:
-        request_id, result, output_path = manager.execute_discovery(
-            model_name=model,
+        result = agent.execute(
             request=request,
             cloud=cloud,
             service=service,
+            thread_id=thread_id
         )
-
-        # Show results
-        if request_id:
-            click.echo(f"\nIteration process: {request_id}")
-            if result.generated_files:
-                click.echo("\nGenerated files:")
-                for filename, _content in result.generated_files.items():
-                    click.echo(f"- {filename}")
-                click.echo(f"\nFiles saved to: {output_path}")
-            else:
-                click.echo("No files were generated")
+        
+        click.echo(json.dumps(result, indent=2, cls=DateTimeEncoder))
     except ValueError as e:
         click.echo(f"Error: {str(e)}", err=True)
         ctx.exit(1)
