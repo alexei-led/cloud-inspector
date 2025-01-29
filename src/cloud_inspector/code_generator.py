@@ -14,45 +14,139 @@ import autopep8
 from autoflake import fix_code
 from black import FileMode, format_str
 from langchain_core.messages.base import BaseMessage
+from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.tracers.context import collect_runs
 from pyflakes.api import check
 from pyflakes.reporter import Reporter
 
 # Local imports
-from cloud_inspector.prompts import PromptManager, PromptTemplate
-from langchain_components.models import ModelCapability, ModelRegistry
-from langchain_components.templates import GeneratedFiles
+from components.models import ModelCapability, ModelRegistry
+from components.types import CodeGenerationPrompt, GeneratedFiles
 
-from .execution import DockerSandbox
+
+def format_prompt(self, prompt: CodeGenerationPrompt, variables: Optional[dict[str, Any]] = None, supports_system_prompt: bool = True) -> list[Any]:
+    # Validate that all required variables are provided
+    required_var_names = {var["name"] for var in prompt.variables}
+    variables = variables or {}
+    provided_var_names = set(variables.keys())
+    missing_vars = required_var_names - provided_var_names
+
+    if missing_vars:
+        var_descriptions = {var["name"]: var["description"] for var in prompt.variables if var["name"] in missing_vars}
+        raise ValueError(f"Missing required variables: {', '.join(f'{name} ({desc})' for name, desc in var_descriptions.items())}")
+
+    system_message = f"""
+You are an expert {prompt.cloud.value} DevOps engineer. Your task is to generate Python scripts and related files for {prompt.cloud.value} operations, ensuring the output meets high-quality standards and adheres to best practices.
+
+OUTPUT FORMAT
+Always respond in the following JSON structure: {{ "main_py": "string", "requirements_txt": "string", "policy_json": "string" }}
+
+GUIDELINES
+1. CODE REQUIREMENTS
+   - Generate Python code using `boto3` that is concise, efficient, and ready for execution without requiring human intervention or review.
+   - Use Python type hints, clear variable names, and modular functions. Avoid placeholder or incomplete code.
+   - Avoid unnecessary comments or overly verbose explanations in the code.
+   - Import all necessary modules required for the task, ensuring the script is self-contained and executable without missing imports (e.g., `datetime`, `boto3`, `logging`, etc.). For example when using `datetime` or `timedelta` use `from datetime import datetime, timedelta`.
+   - If a specific feature cannot be implemented (e.g., due to {prompt.cloud.value} service limitations), omit the function entirely and log a clear explanation.
+
+2. OUTPUT GENERATION IN LLM-FRIENDLY FORMAT
+   - The script must produce its execution output in a format optimized for LLM consumption.
+   - Use a structured JSON format for the output, ensuring it is easy to parse and interpret.
+   - Provide meaningful and categorized information, such as `instance_details`, `security_group_analysis`, `network_acl_analysis`, and `cloudwatch_metrics`.
+   - Include clear descriptions of any identified issues or recommendations in the JSON output.
+   - Example structure:
+     ```json
+     {{
+       "instance_details": {{ ... }},
+       "security_groups": {{ "inbound_rules": [...], "outbound_rules": [...] }},
+       "network_acls": {{ "details": [...] }},
+       "cloudwatch_metrics": {{ "CPUUtilization": [...], "NetworkIn": [...] }},
+       "issues_found": ["Port 22 is closed", "No route to Internet Gateway"],
+       "recommendations": ["Open port 22 in security group", "Add a route to Internet Gateway in the subnet's route table"]
+     }}
+     ```
+
+3. ERROR HANDLING
+   - Implement robust error handling with actionable error messages. Ensure that errors in one function do not terminate the script, allowing it to collect as much data as possible.
+   - Log errors in a separate key, such as `"errors": [...]`, in the JSON output for transparency.
+
+4. {prompt.cloud.value} BEST PRACTICES
+   - Pass the {prompt.cloud.value} region as a parameter if required by the API.
+   - Use the {prompt.cloud.value} SDK default credential provider chain, but allow passing custom credentials if necessary.
+   - Handle large datasets with pagination or streaming where applicable.
+   - Dynamically discover resource IDs instead of using invented or hardcoded values. Avoid placeholder values like `CommandId='your-command-id'`.
+
+5. DEPENDENCIES
+   - Ensure that the `requirements.txt` includes all required dependencies with pinned versions.
+
+6. OUTPUT EXPECTATIONS
+   - main_py: A fully implemented Python script that fulfills the task without excessive complexity or missing functionality.
+   - requirements_txt: Include only necessary dependencies with pinned versions.
+   - policy_json: Provide an IAM policy granting the least privileges needed for the operation.
+
+7. AVOID EXCESSIVE TOKEN USAGE
+   - Prioritize compact, functional code over verbose explanations or redundant logic.
+   - Avoid placeholder or incomplete functions. All functionality should be either implemented or excluded.
+
+8. TESTING AND USABILITY
+   - Include a basic example of how to execute the script with test inputs.
+   - The generated code must be executable without manual fixes or placeholder replacements.
+
+9. ADDITIONAL REQUIREMENTS
+   - Ensure robustness: If one function encounters an error, the script must log the issue and proceed with other tasks.
+   - Eliminate all placeholder values or non-existent resource IDs. Use dynamic resource discovery or provide clear instructions for missing inputs.
+   - Import all required libraries and ensure that no missing imports cause runtime failures.
+
+10. CUSTOM JSON ENCODER FOR TYPES
+   - For any custom types that do not natively support JSON serialization (such as `datetime`), use a custom JSON encoder. For example:
+     ```python
+     from datetime import datetime
+     import json
+
+     class DateTimeEncoder(json.JSONEncoder):
+         def default(self, obj):
+             if isinstance(obj, datetime):
+                 return obj.isoformat()
+             if isinstance(obj, timedelta):
+                 return str(obj)
+             return super().default(obj)
+
+     # Use it like this:
+     print(json.dumps(results, indent=4, cls=DateTimeEncoder))
+     ```
+
+GOAL: The generated code must be correct, complete, and robust, designed to run automatically without human review or intervention.
+The **output produced by the script** must be in a **structured, LLM-friendly JSON format** that is easy to parse, interpret, and use for service troubleshooting.
+"""
+
+    if supports_system_prompt:
+        chat_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", system_message),
+                ("user", prompt.template),
+            ]
+        )
+    else:
+        combined_prompt = f"<instructions>{system_message}</instructions>\n\n<question>{prompt.template}</question>"
+        chat_prompt = ChatPromptTemplate.from_messages(
+            [
+                ("user", combined_prompt),
+            ]
+        )
+
+    return chat_prompt.format_messages(**variables)
 
 
 @dataclass
-class WorkflowResult:
-    """Result of a workflow execution."""
+class CodeGeneratorResult:
+    """Result of a code generation."""
 
     prompt_template: str
     model_name: str
-    timestamp: datetime
-    execution_time: float
-    success: bool
-    iteration_id: Optional[str] = None
-    run_id: Optional[str] = None
-    error: Optional[str] = None
+    iteration_id: str
+    run_id: str
+    generated_at: datetime
     generated_files: Optional[dict[str, str]] = None
-    execution_results: Optional[dict[str, Any]] = None
-    feedback: Optional[dict[str, Any]] = None
-
-
-# Constants for token limit detection
-TOKEN_LIMIT_MARKERS = ("maximum context length", "maximum token limit")
-MAX_RETRIES = 5
-CONTINUE_PROMPT = "Please continue providing the remaining files and code."
-
-
-class TokenLimitError(Exception):
-    """Raised when max token limit is hit and retries are exhausted."""
-
-    pass
 
 
 class ParseError(Exception):
@@ -61,64 +155,18 @@ class ParseError(Exception):
     pass
 
 
-class CodeGenerationWorkflow:
-    """Workflow for generating code from prompts."""
+class CodeGeneratorAgent:
+    """Generating code from prompts."""
 
     def __init__(
         self,
-        prompt_manager: PromptManager,
         model_registry: ModelRegistry,
-        project_name: str,
         output_dir: Optional[Path] = None,
     ):
-        self.prompt_manager = prompt_manager
         self.model_registry = model_registry
-        self.project_name = project_name
         self.output_dir = output_dir or Path("generated_code")
-        self.sandbox = DockerSandbox()
-
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def _handle_token_limit_response(
-        self,
-        structured_model: Any,
-        messages: list[dict[str, str]],
-        initial_response: str,
-    ) -> dict[str, str]:
-        """Handle responses that hit token limits by continuing the conversation."""
-        retry_count = 0
-        accumulated_response = initial_response
-
-        while retry_count < MAX_RETRIES:
-            messages.extend(
-                [
-                    {"role": "assistant", "content": accumulated_response},
-                    {"role": "user", "content": CONTINUE_PROMPT},
-                ]
-            )
-
-            continuation = structured_model.invoke(messages)
-            if not isinstance(continuation, dict):
-                raise ParseError("Expected dictionary response format")
-
-            if continuation.get("parsed") is not None:
-                return {
-                    "main.py": self._reformat_code(continuation["parsed"].main_py, code=True),
-                    "requirements.txt": self._reformat_code(continuation["parsed"].requirements_txt),
-                    "policy.json": self._reformat_code(continuation["parsed"].policy_json),
-                }
-
-            raw_response = continuation.get("raw", "").content if isinstance(continuation.get("raw"), BaseMessage) else str(continuation.get("raw", ""))
-            accumulated_response += f"\n{raw_response}"
-
-            # Check if this is still a token limit issue
-            if not any(marker in raw_response.lower() for marker in TOKEN_LIMIT_MARKERS):
-                raise ParseError(f"Failed to parse response after continuation: {raw_response}")
-
-            retry_count += 1
-
-        raise TokenLimitError(f"Failed to get complete response after {MAX_RETRIES} retries.\nAccumulated response: {accumulated_response}")
 
     def _extract_latest_generated_files(self, raw_response: Union[str, list[dict]]) -> dict[str, str]:
         """Extract latest GeneratedFiles content from Nova model response."""
@@ -138,15 +186,15 @@ class CodeGenerationWorkflow:
             raise ParseError("No GeneratedFiles content found")
         return latest_files
 
-    def execute(
+    def generate_code(
         self,
-        prompt: PromptTemplate,
+        prompt: CodeGenerationPrompt,
         model_name: str,
         variables: dict[str, Any],
-        iteration_id: Optional[str] = None,
+        iteration_id: str,
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
-    ) -> tuple[WorkflowResult, Path]:
+    ) -> tuple[CodeGeneratorResult, Path]:
         """Execute the code generation workflow.
 
         Args:
@@ -157,7 +205,6 @@ class CodeGenerationWorkflow:
             previous_results: Optional dict containing data discovered in previous iterations
             feedback: Optional dict containing user feedback/direction for this iteration
         """
-        start_time = datetime.now()
 
         try:
             # Validate model can generate code
@@ -184,7 +231,7 @@ class CodeGenerationWorkflow:
                     raise ValueError("Missing variables:\n" + "\n".join(f"- {var}" for var in missing_vars))
 
                 # Format prompt using PromptManager
-                messages = self.prompt_manager.format_prompt("", prompt, variables)
+                messages = format_prompt("", prompt, variables)
 
                 # Add context from previous results and feedback if available
                 if previous_results:
@@ -219,56 +266,20 @@ class CodeGenerationWorkflow:
                         "policy.json": self._reformat_code(latest_files["policy_json"]),
                     }
 
-                result = WorkflowResult(
+                result = CodeGeneratorResult(
                     prompt_template=prompt.template,
                     model_name=model_name,
-                    timestamp=start_time,
-                    execution_time=(datetime.now() - start_time).total_seconds(),
-                    success=True,
                     iteration_id=iteration_id,
                     run_id=str(runs_cb.traced_runs[0].id),
+                    generated_at=datetime.now(),
                     generated_files=generated_files,
-                    execution_results=previous_results,
-                    feedback=feedback,
                 )
 
                 output_dir = self._save_result(result)
                 return result, output_dir
 
         except Exception as e:
-            result = WorkflowResult(
-                prompt_template=prompt.template,
-                model_name=model_name,
-                timestamp=start_time,
-                execution_time=(datetime.now() - start_time).total_seconds(),
-                success=False,
-                error=str(e),
-                iteration_id=iteration_id,
-            )
-            output_dir = self._save_result(result)
             raise e
-
-    def execute_generated_code(
-        self,
-        code: str,
-        aws_credentials: Optional[dict[str, str]] = None,
-    ) -> dict[str, Any]:
-        """Execute generated code in sandbox.
-
-        Args:
-            code: Generated Python code
-            aws_credentials: Optional AWS credentials
-
-        Returns:
-            Execution results
-        """
-        success, stdout, stderr = self.sandbox.execute(code, aws_credentials)
-
-        return {
-            "stdout": stdout,
-            "stderr": stderr,
-            "success": success,
-        }
 
     def _reformat_code(self, model_response: str, code: bool = False) -> str:
         """Reformat code by properly handling escaped characters and fix common Python issues."""
@@ -317,10 +328,10 @@ class CodeGenerationWorkflow:
 
         return decoded
 
-    def _save_result(self, result: WorkflowResult) -> Path:
+    def _save_result(self, result: CodeGeneratorResult) -> Path:
         """Save workflow result to file."""
         # Create timestamp-based filename
-        timestamp = result.timestamp.strftime("%Y%m%d_%H%M%S")
+        timestamp = result.generated_at.timestamp()
         base_name = f"{result.model_name}_{timestamp}"
 
         # Create a directory for this run
@@ -345,113 +356,12 @@ class CodeGenerationWorkflow:
                 {
                     "prompt_template": result.prompt_template,
                     "model_name": result.model_name,
-                    "timestamp": result.timestamp.isoformat(),
-                    "execution_time": result.execution_time,
-                    "success": result.success,
-                    "error": result.error,
+                    "generated_at": result.generated_at.isoformat(),
                     "run_id": str(result.run_id) if result.run_id else None,
                     "iteration_id": str(result.iteration_id) if result.iteration_id else None,
-                    "execution_results": result.execution_results,
-                    "feedback": result.feedback,
                 },
                 f,
                 indent=2,
             )
 
         return run_dir
-
-    def cleanup(self):
-        """Cleanup resources."""
-        if hasattr(self, "sandbox"):
-            self.sandbox.cleanup()
-
-
-class WorkflowManager:
-    """Manager for handling workflow executions."""
-
-    def __init__(self, output_dir: Optional[Path] = None):
-        self.output_dir = output_dir or Path("generated_code")
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def list_results(
-        self,
-        prompt_template: Optional[str] = None,
-        model_name: Optional[str] = None,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> list[dict[str, Any]]:
-        """list workflow results with optional filtering."""
-        results = []
-
-        # Look for metadata files
-        for meta_file in self.output_dir.rglob("metadata.json"):
-            try:
-                with meta_file.open("r") as f:
-                    data = json.load(f)
-
-                # Apply filters
-                timestamp = datetime.fromisoformat(data["timestamp"])
-                if prompt_template and data["prompt_template"] != prompt_template:
-                    continue
-                if model_name and data["model_name"] != model_name:
-                    continue
-                if start_time and timestamp < start_time:
-                    continue
-                if end_time and timestamp > end_time:
-                    continue
-
-                results.append(data)
-
-            except Exception as e:
-                print(f"Error reading {meta_file}: {e}")
-
-        return sorted(results, key=lambda x: x["timestamp"], reverse=True)
-
-    def get_result(self, prompt_template: str, timestamp: str) -> Optional[dict[str, Any]]:
-        """Get a specific workflow result."""
-        for meta_file in self.output_dir.glob(f"{prompt_template}_*_{timestamp}_meta.json"):
-            try:
-                with meta_file.open("r") as f:
-                    return json.load(f)
-            except Exception:
-                continue
-        return None
-
-    def get_statistics(self) -> dict[str, Any]:
-        """Get execution statistics."""
-        results = self.list_results()
-
-        stats = {
-            "total_executions": len(results),
-            "successful_executions": sum(1 for r in results if r["success"]),
-            "failed_executions": sum(1 for r in results if not r["success"]),
-            "average_execution_time": (sum(r["execution_time"] for r in results) / len(results) if results else 0),
-            "by_model": {},
-            "by_prompt": {},
-            "common_errors": {},
-        }
-
-        # Collect detailed stats
-        for result in results:
-            # Stats by model
-            model = result["model_name"]
-            if model not in stats["by_model"]:
-                stats["by_model"][model] = {"total": 0, "successful": 0}
-            stats["by_model"][model]["total"] += 1
-            if result["success"]:
-                stats["by_model"][model]["successful"] += 1
-
-            # Stats by prompt
-            prompt = result["prompt_template"]
-            if prompt not in stats["by_prompt"]:
-                stats["by_prompt"][prompt] = {"total": 0, "successful": 0}
-            stats["by_prompt"][prompt]["total"] += 1
-            if result["success"]:
-                stats["by_prompt"][prompt]["successful"] += 1
-
-            # Error tracking
-            if not result["success"] and result["error"]:
-                error_type = result["error"].split(":")[0]
-                stats["common_errors"][error_type] = stats["common_errors"].get(error_type, 0) + 1
-
-        return stats

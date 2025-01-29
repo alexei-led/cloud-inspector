@@ -1,7 +1,8 @@
-# PROJECT: Iterative, Agentic LLM-Driven Cloud Inspection and Troubleshooting System (AWS Focus Initially)
+# PROJECT: Iterative, Agentic LLM-Driven Cloud Inspection and Troubleshooting System
 
 ## 1. OVERVIEW AND OBJECTIVES
-This project aims to create an intelligent, iterative system that leverages Language Models (LLMs) to interact with cloud services, specifically focusing on Amazon Web Services (AWS) as the initial target. The system will dynamically generate, validate, and execute Python scripts to collect data from AWS services based on user queries. The goal is to provide actionable insights and context to address user requests by methodically generating and executing small Python scripts. The system will capture, store, and track every piece of discovered data to inform subsequent steps or iterations.
+
+This project aims to create an intelligent, iterative system that leverages Language Models (LLMs) to interact with cloud services, initially focusing on Amazon Web Services (AWS). The system will dynamically generate, validate, and execute Python scripts to collect helpful information from AWS services based on user request. The goal is to provide actionable insights and context to address user requests by methodically generating and executing small Python scripts. The system will capture, store, and track every piece of discovered data to inform subsequent steps or iterations.
 
 - Build an end-to-end “agentic” system that uses multiple AI models to iteratively collect data from the cloud.
 - Provide actionable insights and context to address user requests by methodically generating and executing small Python scripts.
@@ -17,186 +18,311 @@ The system will follow a structured, iterative process to collect data from AWS 
 
 2. **Orchestration Agent (Planning & Branching)**
    - Decides whether more data is needed before finalizing an answer.
-   - When more data is needed, it crafts a prompt describing the next data-fetching task.
+   - When more data is needed, it starts the first data discovery iteration.
+   - Tracks the current state of the system and the data collected so far.
+   - Merges newly fetched data into the global context.
+   - Reviews the current context and decides the next step:
+     - If more data is needed it triggers the next iteration.
+     - If enough data is collected or reaching the iteration limit, it finalizes the answer.
 
-3. **Code Generation Agent**
-   - Takes the prompt from the Orchestration Agent.
-   - Produces a Python script, minimal dependency requirements, and an IAM policy (if needed) to safely collect the next piece of data.
+3. **Prompt Generator Agent**
+   - The first step in each iteration loop.
+   - Generates prompts for the Code Generation Agent based on the current state and the user request.
+   - Provides context, previously collected data for reference, and the next piece of information to fetch.
+   - Ensures instructions for script generation are focused and minimal to avoid complexity.
 
-4. **Code Validation Agent**
-   - Checks the Python script for obvious errors using linters or an LLM prompt for syntax/security best practices.
-   - Fixes trivial issues or flags them for regeneration.
+4. **Code Generation Agent**
+   - The second step in each iteration loop.
+   - Takes the prompt template and variables from the Prompt Generator Agent.
+   - Generates a Python script, minimal dependency requirements, and an IAM policy (if needed) to safely collect the next piece of data.
+   - Ensures the script is concise, secure, and focused on the task at hand.
+   - Uses linter to fix minor issues and ensure code quality.
+   - If linting fails, passes the code back to the Code Generation Agent for correction along with the error details and previous context.
 
 5. **Code Execution Agent**
-   - Attempts to run the validated script.
+   - The third step in each iteration loop.
+   - Receives the validated Python script, dependencies, and IAM policy (if applicable).
+   - Attempts to run the script in an isolated environment (Docker container or similar).
    - Captures response data (standard output) and any runtime errors or exceptions.
+   - If the script fails, passes the error details back to the Code Generation Agent for correction.
+   - If successful, returns the output data to the Orchestration Agent.
 
-6. **Error Handling & Correction Loop**
-   - If the code fails, errors (e.g., syntax, permissions) are passed back to the Code Generation Agent for iterative fixes up to a limit of attempts.
-
-7. **Data Collection & Aggregation**
-   - On success, the data is stored in a structured format, appended to previously fetched results.
-   - The Orchestration Agent reviews newly collected data, the original request, and all prior context to decide if more data is required.
-
-8. **Iteration Limits & Completion**
-   - The system repeats steps 2–7 until enough relevant data is collected or a preset iteration limit is reached (e.g., 4 loops).
-   - The final, aggregated data and all metadata are returned to the user and stored for future reference.
+6. **Data Aggregation & Context Update**
+   - After each successful script execution, the Orchestration Agent updates the global context with the newly collected data.
+   - The system decides whether more data is needed based on the current context and the user request.
+   - If more data is needed, the system loops back to the Prompt Generator Agent to start the next iteration and providing directive feedback based on the current context.
+   - If enough data is collected or the iteration limit is reached, the system finalizes the answer and returns the aggregated data.
 
 ## 3. LANGGRAPH & LANGSMITH INTEGRATION
 
-- **Define Each Agent and Model as a Node in a LangGraph:**
-  - Orchestration Agent node (decision & planning).
-  - Code Generation Agent node (LLM specialized in code creation, e.g., OpenAI or Anthropic).
-  - Code Validation Agent node (LLM or linting pipeline).
-  - Code Execution Agent node (responsible for actually running the code).
-- Each node can have its own model configuration and parameters (temperature, max tokens, etc.).
-- LangSmith can store each node’s outputs, logs, and metadata such as timestamps, iteration numbers, and statuses.
+### LangGraph Integration
+
+- Implement StateGraph to manage the iterative workflow
+- Define nodes for each agent (Orchestration, Prompt Generator, Code Generation, Code Execution)
+- Configure state management:
+  ```python
+  class WorkflowState(TypedDict):
+      context: dict  # Stores collected data and iteration history
+      current_iteration: int
+      user_request: str
+      collected_data: list[dict]
+      agent_outputs: dict
+  ```
+- Define edges between nodes with conditional logic:
+  - Orchestration → Prompt Generator (when more data needed)
+  - Prompt Generator → Code Generation
+  - Code Generation → Code Execution
+  - Code Execution → Orchestration (for data aggregation)
+  - Orchestration → Final Output (when complete)
+
+### LangSmith Integration
+- Track agent performance and workflow metrics
+- Log each iteration's:
+  - Generated prompts
+  - Code snippets
+  - Execution results
+  - State changes
+- Enable debugging and optimization through:
+  - Trace visualization
+  - Performance analytics
+  - Error tracking
 
 ## 4. DETAILED GOALS
 
 ### A. Iterative Code Generation and Execution
 
-- Use LLMs to generate Python code snippets based on prompts from the Orchestration Agent.
-- Generate small, targeted Python scripts to fetch the “next valuable piece of information.”
-- Limit the scope of each script to reduce complexity and facilitate easier debugging.
-
 ### B. State Management and Context Tracking
-
-- Track the current state of the system and the data collected so far.
-- Maintain partial results from each execution in a structured JSON or database format:
-
-  ```json
-  {
-    "step": 2,
-    "task": "Check EC2 instance states",
-    "output": {...}
-  }
-  ```
-
-- Use these partial results to enrich subsequent prompts and decision steps.
 
 ### C. Agent-like Debugging and Error Feedback
 
-- Implement a feedback loop between the Code Generation and Execution Agents.
-- If the script fails, automatically capture error outputs (stack traces, permission errors, API rate limits).
-- Regenerate or patch code by feeding errors back to the Code Generation Agent.
-- Continue attempts until success or a set limit is reached.
-
 ### D. Orchestration and Decision Logic
-
-- Keep an overarching Orchestration Agent controlling the flow.
-- This agent checks if the system has enough data to satisfy the user’s initial query or if another iteration is required.
-- **Branching logic:** Depending on discovered data (e.g., an EC2 instance is “stopped”), the Orchestration Agent might pivot to collecting different or more focused information.
 
 ### E. Validation and Security
 
-- Integrate pre-execution linting (e.g., black, flake8, Bandit) to catch syntax, formatting, or security issues.
-- Generate IAM policies or minimal permission sets as JSON, ensuring scripts run without granting excessive privileges.
-- Optionally use a sandbox or isolated container environment for script execution.
-
 ### F. Data Output and Storage
-
-- Aggregate all discovered data in a final JSON or structured format for ease of consumption.
-- Use LangSmith to preserve metadata (step name, date/time, status, iteration count).
-- Store final run details, so each completed session becomes a record that can be reviewed and shared.
 
 ## 5. SYSTEM COMPONENTS & AGENTS
 
 1. **Orchestration Agent**
-   - “Controls the show.” Receives user requests, tracks iteration count, and merges newly fetched data into the global context.
-   - Decides if more steps are needed or if the process is complete.
+- Input: User request, global state, iteration data
+- Responsibilities:
+  - Analyze user requests to identify required cloud information
+  - Manage the workflow state and iteration cycles
+  - Track collected data and merge new discoveries
+  - Make decisions on:
+    - Whether more data collection is needed
+    - When to terminate the collection process
+    - How to handle errors and retries
+  - Provide feedback for subsequent iterations
+  - Maintain global context and state
+- Output:
+  - Updated workflow state
+  - Next action decision (continue/complete)
+  - Aggregated results
+  - Error handling directives
 
-2. **Code Generation Agent**
-   - Specialized for Python script generation, with minimal external libraries.
-   - Produces:  
-     - Code snippet (main.py).
-     - Dependencies list (requirements.txt).
-     - IAM policy as JSON (optional, if relevant to the step).
+2. **Prompt Generator Agent**
+- Input: Current state, user request, iteration count
+- Responsibilities:
+  - Analyze previous discoveries
+  - Generate focused prompts for next data collection
+  - Define required variables and success criteria
+- Output: CodeGenerationPrompt object with:
+  - Template
+  - Variables
+  - Success criteria
+  - Description
 
-3. **Code Validation Agent**
-   - Applies automatic or LLM-driven lint checks, security scanning, and minor fixes.
-   - Aims to prevent easy-to-catch syntax or library import failures.
+3. **Code Generation Agent**
+- Input: CodeGenerationPrompt
+- Responsibilities:
+  - Generate Python code for AWS SDK interactions
+  - Include error handling
+  - Generate minimal IAM policies
+  - Implement code validation
+- Output:
+  - Validated Python script
+  - Dependencies list
+  - IAM policy (if needed)
 
 4. **Code Execution Agent**
-   - Runs the given script in an isolated environment.
-   - Captures console output, error logs, and exit statuses.
-   - Returns execution results to the Orchestration Agent.
+- Input: Validated code, dependencies, IAM policy
+- Responsibilities:
+  - Set up isolated execution environment
+  - Install dependencies
+  - Execute code safely
+  - Capture outputs and errors
+  - Handle timeouts and resource limits
+- Output:
+  - Execution results
+  - Error details (if any)
+  - Resource usage metrics
 
-5. **Error Handling**
-   - If any error arises, pass the entire code snippet, the original generation prompt, and error logs back to the Code Generation Agent for fixes or alternative solutions.
-   - Retry up to a certain threshold (e.g., 2-3 attempts) before aborting.
+## 5.1 REQUIRED COMPONENTS
 
-6. **Data Persistence & Final Aggregation**
-   - Collect outputs from each script execution.
-   - Merge with previous data to form a complete picture.
-   - Return aggregated results once iteration is done.
+1. Core Agents:
+   - Orchestration Agent
+   - Prompt Generator Agent
+   - Code Generation Agent
+   - Code Execution Agent
+
+2. State Management:
+   - WorkflowState class
+   - Context manager
+   - Data aggregation system
+
+3. Execution Environment:
+   - Docker container system
+   - Dependency manager
+   - IAM policy handler
+
+4. Integration Components:
+   - LangGraph workflow manager
+   - LangSmith logging system
+   - AWS SDK interface
+
+5. Support Systems:
+   - Code validation/linting system
+   - Error handling system
+   - Security validation system
+   - Metrics collection system
+
+6. Storage & Persistence:
+   - State storage (Redis/similar)
+   - Results storage
+   - Logging storage
+
+7. API Components (for service mode):
+   - FastAPI server
+   - Authentication system
+   - Rate limiter
+   - Job queue
 
 ## 6. ILLUSTRATIVE WORKFLOW DIAGRAM
 
-Below is a sample iterative loop using a flowchart notation (Mermaid or similar):
-
 ```mermaid
-flowchart TD
-
-    %% Define styling classes
-    classDef start fill:#4caf50,stroke:#fff,stroke-width:2px,color:#fff
-    classDef agent fill:#2196f3,stroke:#fff,stroke-width:1px,color:#fff
-    classDef decision fill:#ff9800,stroke:#fff,stroke-width:2px,color:#fff
-    classDef endClass fill:#4caf50,stroke:#fff,stroke-width:2px,color:#fff
-
-    A["User Request"]:::start --> B["Orchestration Agent"]:::agent
-    B --> C["Generate Script Prompt"]:::agent
-    C --> D["Code Generation Agent"]:::agent
-    D --> E["Code Validation Agent"]:::agent
-    E --> F["Code Execution Agent"]:::agent
-    F --> G{"Execution Success?"}:::decision
-    G -- No --> H["Send Error & Code<br>Back to Generation"]:::agent
-    H --> E
-    G -- Yes --> I["Collect Output<br>& Append to Context"]:::agent
-    I --> J{"More Data Needed?"}:::decision
-    J -- Yes --> B
-    J -- No --> K["Return All Data"]:::endClass
+graph TD
+    Start([Start]) --> UserRequest[User Request]
+    UserRequest --> Orchestrator{Orchestration Agent}
+    
+    subgraph IterativeLoop[Iterative Discovery Loop]
+        Orchestrator -->|Need More Data| PromptGen[Prompt Generator Agent]
+        PromptGen -->|Generate Prompt| CodeGen[Code Generation Agent]
+        CodeGen -->|Generate Script| Validation{Code Validation}
+        Validation -->|Failed| CodeGen
+        Validation -->|Passed| Executor[Code Execution Agent]
+        Executor -->|Error| CodeGen
+        Executor -->|Success| DataAggregation[Data Aggregation]
+        DataAggregation --> StateUpdate[Update Global State]
+        StateUpdate --> Orchestrator
+    end
+    
+    Orchestrator -->|Complete| ResultsProcessing[Process Final Results]
+    ResultsProcessing --> End([End])
+    
+    subgraph States[State Management]
+        GlobalContext[(Global Context)]
+        IterationData[(Iteration Data)]
+        CollectedData[(Collected Data)]
+    end
+    
+    StateUpdate -.->|Update| GlobalContext
+    StateUpdate -.->|Update| IterationData
+    StateUpdate -.->|Store| CollectedData
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style IterativeLoop fill:#f0f0f0,stroke:#333,stroke-width:2px
+    style States fill:#e6f3ff,stroke:#333,stroke-width:2px
+    style Orchestrator fill:#FFA07A
+    style PromptGen fill:#98FB98
+    style CodeGen fill:#87CEEB
+    style Executor fill:#DDA0DD
 ```
 
 ## 7. ADDITIONAL ENHANCEMENTS
 
-- **Performance & Cost Optimization**
-  - Minimize extraneous iterations by refining orchestration logic.
-  - Cache partial results and reduce repeated AWS API calls.
+### Multi-Cloud Support
+- Azure integration
+  - Azure SDK implementation
+  - Azure-specific IAM handling
+- GCP integration
+  - Google Cloud SDK implementation
+  - GCP service account management
 
-- **LLM Model Comparison & Experimentation**
-  - Plug in different models (OpenAI GPT-4, Anthropic, Amazon Bedrock) for code generation or orchestration.
-  - Log success rates, error frequencies, and cost metrics.
+### REST API Service
+- FastAPI implementation
+- Endpoints:
+  - /inspect: Start new inspection
+  - /status: Check inspection status
+  - /results: Get inspection results
+- Authentication & authorization
+- Rate limiting
+- API documentation (OpenAPI)
 
-- **Compliance & Security**
-  - Incorporate best practices for AWS resource access (least privilege).
-  - Validate code snippets against compliance frameworks if necessary.
+### Scalability Features
+- Kubernetes deployment support
+- Horizontal scaling of execution agents
+- Redis-based state management
+- Job queuing system
 
-- **Testing & Verification**
-  - Generate mock test data (e.g., using Moto or localstack for AWS).
-  - Ensure each script is verifiable before actually calling real AWS services.
+### Cost Optimization
+- Resource pooling
+- Execution time limits
+- Cloud resource cleanup
+- Cost tracking per request
 
-- **Multi-Cloud Expansion (Future Scope)**
-  - Extend approach to GCP and Azure with minimal modifications.
-  - Provide platform-agnostic code generation or resource mappings.
+### Additional Features
+- Custom plugin system
+- Template library for common scenarios
+- Export results in multiple formats
+- Integration with monitoring tools
 
-## 8. TRACKING & LOGGING (LANGSMITH)
+## 8. TRACKING & LOGGING
 
-- For each step of the graph (Orchestration, Generation, Validation, Execution):
-  - Record start/end time, status (success/fail), any generated code, and outputs.
-  - Store metadata in a structured log (JSON or DB).
+### Local Logging
+- Standard Python logging configuration
+  - File and console handlers
+  - JSON formatting for structured logs
+  - Log levels for different components
+  - Rotation policy for log files
 
-- **Final Run Artifact**
-  - Contains aggregated data from all successful fetches plus any residual errors.
-  - Includes iteration count, user request details, date/time, and final system status.
+### LangSmith Integration
+- Trace model executions
+  - Prompt generation steps
+  - Code generation attempts
+  - Success/failure rates
+- Graph flow monitoring
+  - State transitions
+  - Agent interactions
+  - Iteration cycles
+- Basic metrics
+  - Response times
+  - Token usage
+  - Success rates
 
 ## 9. CONCLUSION
 
-By embracing an agentic, iterative approach, this system can comprehensively address the user’s request by dynamically generating, validating, and running minimal Python scripts that each fetch the “next valuable piece of data.” Along with structured logging and an isolated execution environment, this design aims for security, granularity, and maintainability.
+This project presents a sophisticated approach to cloud infrastructure inspection using a combination of LLMs and automated agents. The system's key strengths lie in its:
 
-### Key benefits of this new plan include:
+1. **Iterative Discovery**
+   - Progressive data collection
+   - Context-aware decision making
+   - Adaptive workflow management
 
-- An adaptive workflow that only gathers additional data if needed.
-- Automatic error handling and code correction loops.
-- Flexible design that supports multiple LLMs and easy expansion to other cloud providers.
-- Rich logging and output storage to ensure reproducibility and continuous improvement.
+2. **Modular Architecture**
+   - Clear separation of concerns
+   - Easily extensible components
+   - Pluggable agent system
+
+3. **Safety & Reliability**
+   - Secure code execution
+   - Comprehensive validation
+   - Error handling and recovery
+
+4. **Future-Ready Design**
+   - Multi-cloud extensibility
+   - API-first approach
+   - Scalability considerations
+
+The initial AWS focus provides a solid foundation for future enhancements while delivering immediate value for cloud infrastructure inspection and troubleshooting tasks.

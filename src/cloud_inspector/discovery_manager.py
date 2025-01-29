@@ -6,9 +6,9 @@ from typing import Any, Optional
 
 from pydantic import BaseModel
 
-from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import CloudProvider, PromptManager
-from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowResult
+from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult
+from cloud_inspector.prompt_generator import PromptGeneratorAgent
+from components.types import CloudProvider
 
 
 class DiscoveryState(BaseModel):
@@ -43,13 +43,11 @@ class DiscoveryManager:
 
     def __init__(
         self,
-        prompt_manager: PromptManager,
-        workflow: CodeGenerationWorkflow,
-        prompt_generator: PromptGenerator,
+        code_generator: CodeGeneratorAgent,
+        prompt_generator: PromptGeneratorAgent,
         state_dir: Optional[Path] = None,
     ):
-        self.prompt_manager = prompt_manager
-        self.workflow = workflow
+        self.code_generator = code_generator
         self.prompt_generator = prompt_generator
         self.state_dir = state_dir or Path("discovery_states")
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +60,7 @@ class DiscoveryManager:
         service: Optional[str] = None,
         request_id: Optional[str] = None,
         variables: Optional[dict[str, Any]] = None,
-    ) -> tuple[str, WorkflowResult, Path]:
+    ) -> tuple[str, CodeGeneratorResult, Path]:
         """Execute a discovery iteration, either starting new or continuing existing.
 
         Args:
@@ -98,9 +96,8 @@ class DiscoveryManager:
             cloud=state.cloud,
             service=state.service,
             operation="inspect",
-            description=state.original_request,
+            request=state.original_request,
             variables=[{"name": k, "value": v} for k, v in state.variables.items()],
-            tags=["cloud_inspection", state.service],
             previous_results=state.discovered_data,
             iteration=state.iteration_count + 1,
         )
@@ -112,8 +109,8 @@ class DiscoveryManager:
         # Validate all required variables have values
         self._validate_variables(state.variables)
 
-        # Execute workflow
-        result, output_path = self.workflow.execute(
+        # Generate code using prompt
+        result, output_path = self.code_generator.generate_code(
             prompt=prompt,
             model_name=model_name,
             variables=state.variables,
@@ -121,33 +118,11 @@ class DiscoveryManager:
             previous_results=state.discovered_data,
         )
 
-        # Update state with new discoveries
-        if result.execution_results:
-            state.discovered_data.update(result.execution_results)
-
-        # Check if discovery is complete
-        if hasattr(prompt, "discovery_complete"):
-            state.discovery_complete = prompt.discovery_complete
-
         # Save updated state
         state.updated_at = datetime.now()
         self._save_state(state)
 
         return state.request_id, result, output_path
-
-    def complete_discovery(self, request_id: str, reason: str = "completed") -> None:
-        """Mark a discovery process as complete."""
-        state = self._load_state(request_id)
-        state.status = "completed"
-        state.completion_reason = reason
-        state.discovery_complete = True
-        state.updated_at = datetime.now()
-        self._save_state(state)
-
-    def get_discovered_data(self, request_id: str) -> dict[str, Any]:
-        """Get all discovered data for a request."""
-        state = self._load_state(request_id)
-        return state.discovered_data
 
     def _get_or_create_state(
         self,

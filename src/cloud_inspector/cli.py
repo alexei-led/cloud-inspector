@@ -1,19 +1,17 @@
 """Command-line interface for Cloud Inspector."""
 
-import dis
 import json
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 import click
 
+from cloud_inspector.code_generator import CodeGeneratorAgent
 from cloud_inspector.discovery_manager import DiscoveryManager
-from cloud_inspector.prompt_generator import PromptGenerator
-from cloud_inspector.prompts import CloudProvider, PromptManager, PromptType
-from cloud_inspector.workflow import CodeGenerationWorkflow, WorkflowManager
-from langchain_components.models import ModelRegistry
+from cloud_inspector.prompt_generator import PromptGeneratorAgent
+from components.models import ModelRegistry
+from components.types import CloudProvider
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -54,195 +52,11 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
     # Store common objects in context
     ctx.ensure_object(dict)
     ctx.obj["project"] = project
-    ctx.obj["registry"] = ModelRegistry()
-    ctx.obj["prompt_manager"] = PromptManager()
-    ctx.obj["workflow"] = CodeGenerationWorkflow(
-        prompt_manager=ctx.obj["prompt_manager"],
-        model_registry=ctx.obj["registry"],
-        project_name=project,
-    )
-    ctx.obj["workflow_manager"] = WorkflowManager()
-    ctx.obj["prompt_generator"] = PromptGenerator(model_registry=ctx.obj["registry"])
-    ctx.obj["discovery_manager"] = DiscoveryManager(prompt_manager=ctx.obj["prompt_manager"], workflow=ctx.obj["workflow"], prompt_generator=ctx.obj["prompt_generator"])
-
-
-# Prompt Management Commands
-
-
-@cli.group()
-def prompt():
-    """Manage prompt templates."""
-    pass
-
-
-@prompt.command(name="list")
-@click.option("--tag", help="Filter prompts by tag")
-@click.option("--service", help="Filter prompts by service")
-@click.option("--cloud", help="Filter prompts by cloud provider")
-@click.option("--prompt-type", help="Filter prompts by type (predefined/generated)")
-@click.option("--discovery-complete", type=bool, help="Filter prompts by discovery status")
-@click.option("--parent-request", help="Filter prompts by parent request ID")
-@click.option(
-    "--format",
-    type=click.Choice(["table", "json"], case_sensitive=False),
-    default="table",
-    help="Output format",
-)
-@click.pass_context
-def list_prompts(
-    ctx: click.Context,
-    tag: Optional[str],
-    service: Optional[str],
-    cloud: Optional[str],
-    prompt_type: Optional[str],
-    discovery_complete: Optional[bool],
-    parent_request: Optional[str],
-    format: str,
-):
-    """List all available prompts. Optionally filter by various criteria."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    prompts = prompt_manager.list_prompts()
-
-    # Apply filters
-    if tag:
-        prompts = {k: v for k, v in prompts.items() if tag in v.tags}
-    if service:
-        prompts = {k: v for k, v in prompts.items() if v.service == service}
-    if cloud:
-        prompts = {k: v for k, v in prompts.items() if v.cloud == cloud}
-    if prompt_type:
-        prompts = {k: v for k, v in prompts.items() if v.prompt_type == prompt_type}
-    if discovery_complete is not None:
-        prompts = {k: v for k, v in prompts.items() if getattr(v, "discovery_complete", None) == discovery_complete}
-    if parent_request:
-        prompts = {k: v for k, v in prompts.items() if getattr(v, "parent_request_id", None) == parent_request}
-
-    if not prompts:
-        click.echo("No prompts found matching the criteria.")
-        return
-
-    if format == "json":
-        click.echo(json.dumps({k: v.model_dump() for k, v in prompts.items()}, indent=2, cls=DateTimeEncoder))
-        return
-
-    # Table format
-    headers = ["Name", "Service", "Operation", "Type", "Discovery", "Parent Request"]
-
-    # Emoji mapping for prompt types
-    prompt_type_emoji = {"predefined": "📝", "generated": "🤖", None: "-"}
-
-    rows = []
-    for name, prompt in prompts.items():
-        discovery_status = getattr(prompt, "discovery_complete", None)
-        discovery_str = "✓" if discovery_status else "..." if discovery_status is False else "-"
-        parent_req = getattr(prompt, "parent_request_id", "-")
-        service = prompt.service if prompt.service is not None else "-"
-        operation = prompt.operation if prompt.operation is not None else "-"
-        prompt_type = prompt_type_emoji.get(prompt.prompt_type, "-")
-        parent_req_display = parent_req[:8] + "..." if parent_req and parent_req != "-" and len(parent_req) > 8 else parent_req
-        rows.append([name, service, operation, prompt_type, discovery_str, parent_req_display])
-
-    # Sort rows by name
-    rows.sort(key=lambda x: x[0])
-
-    # Print table
-    click.echo("\nAvailable Prompts:")
-    click.echo("=" * 120)
-
-    # Calculate column widths
-    widths = [max(len(str(row[i])) for row in [headers] + rows) for i in range(len(headers))]
-
-    # Print headers
-    header_format = "  ".join(f"{{:<{w}}}" for w in widths)
-    click.echo(header_format.format(*headers))
-    click.echo("-" * 120)
-
-    # Print rows
-    row_format = "  ".join(f"{{:<{w}}}" for w in widths)
-    for row in rows:
-        # Replace None with "-" during formatting
-        formatted_row = ["-" if x is None else x for x in row]
-        click.echo(row_format.format(*formatted_row))
-
-
-@prompt.command(name="show")
-@click.argument("name")
-@click.pass_context
-def show_prompt(ctx: click.Context, name: str):
-    """Show details of a specific prompt."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    prompt = prompt_manager.get_prompt(name)
-
-    if not prompt:
-        click.echo(f"Prompt '{name}' not found.")
-        return
-
-    click.echo("\nPrompt Details:")
-    click.echo("=" * 40)
-    click.echo(f"Name: {name}")
-    click.echo(f"Service: {prompt.service}")
-    click.echo(f"Operation: {prompt.operation}")
-    click.echo(f"Cloud: {prompt.cloud}")
-    click.echo(f"Type: {prompt.prompt_type}")
-    click.echo(f"Tags: {', '.join(prompt.tags)}")
-
-    if prompt.prompt_type == PromptType.GENERATED:
-        click.echo("\nGeneration Info:")
-        click.echo("-" * 40)
-        click.echo(f"Generated By: {prompt.generated_by}")
-        click.echo(f"Generated At: {prompt.generated_at}")
-        click.echo(f"Iteration: {getattr(prompt, 'iteration', 1)}")
-        click.echo(f"Parent Request: {getattr(prompt, 'parent_request_id', '-')}")
-
-        click.echo("\nDiscovery Status:")
-        click.echo("-" * 40)
-        discovery_complete = getattr(prompt, "discovery_complete", None)
-        click.echo(f"Discovery Complete: {'✓' if discovery_complete else '...' if discovery_complete is False else '-'}")
-
-        if hasattr(prompt, "discovered_resources") and prompt.discovered_resources:
-            click.echo("\nDiscovered Resources:")
-            for resource in prompt.discovered_resources:
-                click.echo(f"  - {json.dumps(resource)}")
-
-        if hasattr(prompt, "dependencies") and prompt.dependencies:
-            click.echo("\nDependencies:")
-            for dep in prompt.dependencies:
-                click.echo(f"  - {dep}")
-
-        if hasattr(prompt, "next_discovery_targets") and prompt.next_discovery_targets:
-            click.echo("\nNext Discovery Targets:")
-            for target in prompt.next_discovery_targets:
-                click.echo(f"  - {target}")
-
-    click.echo("\nDescription:")
-    click.echo("-" * 40)
-    click.echo(prompt.description)
-
-    if prompt.variables:
-        click.echo("\nVariables:")
-        click.echo("-" * 40)
-        for var in prompt.variables:
-            click.echo(f"  {var['name']}: {var['description']}")
-
-    click.echo("\nTemplate:")
-    click.echo("-" * 40)
-    click.echo(prompt.template)
-
-
-@prompt.command()
-@click.argument("file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.pass_context
-def validate(ctx: click.Context, file: Path):
-    """Validate a prompt file."""
-    prompt_manager = ctx.obj["prompt_manager"]
-    errors = prompt_manager.validate_prompt_file(file)
-
-    if not errors:
-        click.echo(f"✅ Prompt file '{file}' is valid.")
-    else:
-        click.echo(f"❌ Found {len(errors)} errors in '{file}':")
-        for error in errors:
-            click.echo(f"  - {error}")
+    model_registry = ModelRegistry()
+    ctx.obj["registry"] = model_registry
+    code_generator = CodeGeneratorAgent(model_registry)
+    prompt_generator = PromptGeneratorAgent(model_registry)
+    ctx.obj["discovery_manager"] = DiscoveryManager(code_generator=code_generator, prompt_generator=prompt_generator)
 
 
 # Models Commands
@@ -275,55 +89,6 @@ def list_models(ctx: click.Context):
 
 
 @cli.group()
-def code():
-    """View and manage code generation results from iterations."""
-    pass
-
-
-@code.command(name="list")
-@click.option("--prompt", help="Filter by prompt name")
-@click.option("--model", help="Filter by model name")
-@click.option("--start", type=click.DateTime(), help="Filter by start time")
-@click.option("--end", type=click.DateTime(), help="Filter by end time")
-@click.pass_context
-def list_code_results(
-    ctx: click.Context,
-    prompt: Optional[str],
-    model: Optional[str],
-    start: Optional[datetime],
-    end: Optional[datetime],
-):
-    """List code generation results from discovery process."""
-    discovery_manager = ctx.obj["discovery_manager"]
-    results = discovery_manager.list_results(prompt=prompt, model=model, start_time=start, end_time=end)
-
-    if not results:
-        click.echo("No code generation results found.")
-        return
-
-    click.echo("\nCode Generation Results:")
-    click.echo("=" * 100)
-
-    headers = ["Request ID", "Prompt", "Model", "Status", "Created At"]
-    rows = []
-
-    for result in results:
-        rows.append([result.request_id, result.prompt_name, result.model_name, result.status, result.created_at.strftime("%Y-%m-%d %H:%M:%S")])
-
-    # Calculate column widths
-    widths = [max(len(str(row[i])) for row in [headers] + rows) for i in range(len(headers))]
-    row_format = "  ".join(f"{{:<{w}}}" for w in widths)
-
-    # Print headers
-    click.echo(row_format.format(*headers))
-    click.echo("-" * 100)
-
-    # Print rows
-    for row in rows:
-        click.echo(row_format.format(*row))
-
-
-@cli.group()
 def discovery():
     """Manage cloud resource discovery process."""
     pass
@@ -343,45 +108,15 @@ class CloudProviderParamType(click.ParamType):
 
 
 @discovery.command()
-@click.argument("request_id")
-@click.argument("data_file", type=click.Path(exists=True))
-@click.option("--source", multiple=True, help="Source files used to collect data.")
-@click.option("--feedback", help="Feedback for next iteration in JSON format.")
-@click.pass_context
-def collect(
-    ctx: click.Context,
-    request_id: str,
-    data_file: str,
-    source: tuple[str, ...],
-    feedback: Optional[str],
-) -> None:
-    """Save collected data from manual code execution."""
-    discovery_manager = ctx.obj["discovery_manager"]
-    try:
-        feedback_dict = json.loads(feedback) if feedback else None
-        discovery_manager.save_collected_data(
-            request_id,
-            Path(data_file),
-            list(source),
-            feedback_dict,
-        )
-        click.echo(f"Saved collected data for {request_id}")
-    except Exception as e:
-        click.echo(f"Error saving collected data: {e}", err=True)
-
-
-@discovery.command()
-@click.argument("request", required=False)
-@click.option("--request-id", help="ID of existing iteration to continue")
+@click.argument("request", required=True, help="User request that triggered the discovery")
 @click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS, help="Name of the cloud provider (for new iterations)")
 @click.option("--service", help="Name of the service to interact with (for new iterations)")
-@click.option("--model", default="gpt-4o", help="Name of the LLM model to use")
+@click.option("--model", default="gpt-4o-mini", help="Name of the LLM model to use")
 @click.pass_context
 def execute(
     ctx: click.Context,
-    request: Optional[str],
-    request_id: Optional[str],
-    cloud: Optional[CloudProvider],
+    request: str,
+    cloud: CloudProvider,
     service: Optional[str],
     model: str,
 ):
@@ -395,7 +130,6 @@ def execute(
     try:
         request_id, result, output_path = manager.execute_discovery(
             model_name=model,
-            request_id=request_id,
             request=request,
             cloud=cloud,
             service=service,
@@ -414,33 +148,6 @@ def execute(
     except ValueError as e:
         click.echo(f"Error: {str(e)}", err=True)
         ctx.exit(1)
-
-
-@discovery.command()
-@click.argument("request_id")
-@click.argument("reason")
-@click.pass_context
-def complete(ctx: click.Context, request_id: str, reason: str) -> None:
-    """Mark an iteration process as complete."""
-    discovery_manager = ctx.obj["discovery_manager"]
-    try:
-        discovery_manager.complete_discovery(request_id, reason)
-        click.echo(f"Marked {request_id} as complete: {reason}")
-    except Exception as e:
-        click.echo(f"Error completing iteration: {e}", err=True)
-
-
-@discovery.command()
-@click.argument("request_id")
-@click.pass_context
-def show(ctx: click.Context, request_id: str) -> None:
-    """Show collected data for a request."""
-    discovery_manager = ctx.obj["discovery_manager"]
-    try:
-        data = discovery_manager.get_discovered_data(request_id)
-        click.echo(json.dumps(data, indent=2, cls=DateTimeEncoder))
-    except Exception as e:
-        click.echo(f"Error showing collected data: {e}", err=True)
 
 
 if __name__ == "__main__":
