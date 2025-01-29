@@ -1,59 +1,74 @@
-"""State management for orchestration workflow."""
+"""State management for cloud inspection workflow."""
 
 from datetime import datetime
 from typing import Annotated, Any, Optional
 from typing_extensions import TypedDict
 
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel
 
-from components.types import CloudProvider
+from components.types import CloudProvider, WorkflowStatus
 
 
 class OrchestrationState(TypedDict):
-    """State for the orchestration workflow."""
-    messages: Annotated[list, add_messages]  # Chat history
-    context: dict  # Stores collected data and iteration history 
-    current_iteration: int
-    user_request: str
+    """State for the cloud inspection workflow.
+    
+    Attributes:
+        messages: Chat history with add_messages reducer
+        iteration: Current iteration number
+        request: Original user request
+        cloud: Cloud provider being inspected
+        service: Service being inspected
+        discoveries: List of discovered data
+        outputs: Outputs from each agent
+        status: Current workflow status
+        created_at: Workflow creation timestamp
+        updated_at: Last update timestamp
+        reason: Completion or failure reason
+        params: Additional parameters and variables
+    """
+    messages: Annotated[list, add_messages]
+    iteration: int
+    request: str
     cloud: CloudProvider
     service: str
-    collected_data: list[dict]
-    agent_outputs: dict
-    status: str  # in_progress, completed, failed
+    discoveries: list[dict]
+    outputs: dict[str, Any]
+    status: WorkflowStatus
     created_at: datetime
     updated_at: datetime
-    completion_reason: Optional[str]
-    variables: dict[str, Any]
+    reason: Optional[str]
+    params: dict[str, Any]
 
 
 def create_initial_state(
     request: str,
     cloud: CloudProvider,
     service: str,
-    variables: Optional[dict[str, Any]] = None,
+    params: Optional[dict[str, Any]] = None,
 ) -> OrchestrationState:
-    """Create initial state for new orchestration."""
+    """Create initial workflow state.
+    
+    Args:
+        request: User's inspection request
+        cloud: Target cloud provider
+        service: Target cloud service
+        params: Optional additional parameters
+    
+    Returns:
+        New OrchestrationState instance
+    """
     now = datetime.now()
     return {
         "messages": [],
-        "context": {},
-        "current_iteration": 0,
-        "user_request": request,
+        "iteration": 0,
+        "request": request,
         "cloud": cloud,
         "service": service,
-        "collected_data": [],
-        "agent_outputs": {},
-        "status": "in_progress",
+        "discoveries": [],
+        "outputs": {},
+        "status": WorkflowStatus.IN_PROGRESS,
         "created_at": now,
         "updated_at": now,
-        "completion_reason": None,
-        "variables": variables or {},
+        "reason": None,
+        "params": params or {},
     }
-
-
-def add_to_context(key: str, value: Any) -> dict:
-    """Add data to context."""
-    current = {}
-    current[key] = value
-    return current
