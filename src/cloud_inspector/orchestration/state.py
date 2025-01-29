@@ -2,16 +2,16 @@
 
 from datetime import datetime
 from typing import Annotated, Any, Optional
-from typing_extensions import TypedDict
 
 from langgraph.graph.message import add_messages
+from typing_extensions import TypedDict
 
 from components.types import CloudProvider, WorkflowStatus
 
 
 class OrchestrationState(TypedDict):
     """State for the cloud inspection workflow.
-    
+
     Attributes:
         messages: Chat history with add_messages reducer
         iteration: Current iteration number
@@ -26,6 +26,7 @@ class OrchestrationState(TypedDict):
         reason: Completion or failure reason
         params: Additional parameters and variables
     """
+
     messages: Annotated[list, add_messages]
     iteration: int
     request: str
@@ -47,13 +48,13 @@ def create_initial_state(
     params: Optional[dict[str, Any]] = None,
 ) -> OrchestrationState:
     """Create initial workflow state.
-    
+
     Args:
         request: User's inspection request
         cloud: Target cloud provider
         service: Target cloud service
         params: Optional additional parameters
-    
+
     Returns:
         New OrchestrationState instance
     """

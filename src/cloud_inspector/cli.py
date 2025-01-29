@@ -3,13 +3,12 @@
 import json
 import logging
 from datetime import datetime
-from typing import Optional
 
 import click
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
-from cloud_inspector.orchestration.agent import OrchestrationAgent
 from cloud_inspector.execution_agent import CodeExecutionAgent
+from cloud_inspector.orchestration.agent import OrchestrationAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
 from components.models import ModelRegistry
 from components.types import CloudProvider
@@ -127,21 +126,11 @@ def execute(
     thread_id: str,
 ):
     """Execute cloud inspection workflow."""
-    agent = OrchestrationAgent(
-        code_generator=ctx.obj["code_generator"],
-        prompt_generator=ctx.obj["prompt_generator"],
-        code_executor=ctx.obj["code_executor"],
-        model_name=model
-    )
-    
+    agent = OrchestrationAgent(code_generator=ctx.obj["code_generator"], prompt_generator=ctx.obj["prompt_generator"], code_executor=ctx.obj["code_executor"], model_name=model)
+
     try:
-        result = agent.execute(
-            request=request,
-            cloud=cloud,
-            service=service,
-            thread_id=thread_id
-        )
-        
+        result = agent.execute(request=request, cloud=cloud, service=service, thread_id=thread_id)
+
         click.echo(json.dumps(result, indent=2, cls=DateTimeEncoder))
     except ValueError as e:
         click.echo(f"Error: {str(e)}", err=True)
