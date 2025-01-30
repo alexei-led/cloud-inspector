@@ -13,45 +13,48 @@ This project aims to create an intelligent, iterative system that leverages Lang
 
 The system will follow a structured, iterative process to collect data from AWS services based on user queries. The workflow is designed to be adaptive, with each step informing the next based on the data collected so far. The system will use a combination of LLMs, code generation, validation, and execution agents to interact with AWS services securely and efficiently.
 
-1. **User Request Input**
-   - The original user query is analyzed to identify missing or helpful information needed from the cloud.
+1. **Orchestration Agent**
+   - Input: User request, global state, iteration data
+   - Manages the workflow state and iteration cycles
+   - Tracks collected data and merges new discoveries
+   - Makes decisions on:
+     - Whether more data collection is needed
+     - When to terminate the collection process
+     - How to handle errors and retries
+   - Maximum 3 iterations with up to 2 retries per iteration
 
-2. **Orchestration Agent (Planning & Branching)**
-   - Decides whether more data is needed before finalizing an answer.
-   - When more data is needed, it starts the first data discovery iteration.
-   - Tracks the current state of the system and the data collected so far.
-   - Merges newly fetched data into the global context.
-   - Reviews the current context and decides the next step:
-     - If more data is needed it triggers the next iteration.
-     - If enough data is collected or reaching the iteration limit, it finalizes the answer.
+2. **Prompt Generator Agent**
+   - Input: Current state, user request, iteration count
+   - Generates focused prompts for code generation
+   - Analyzes previous discoveries to refine prompts
+   - Defines required variables and success criteria
+   - Ensures instructions are minimal and focused
 
-3. **Prompt Generator Agent**
-   - The first step in each iteration loop.
-   - Generates prompts for the Code Generation Agent based on the current state and the user request.
-   - Provides context, previously collected data for reference, and the next piece of information to fetch.
-   - Ensures instructions for script generation are focused and minimal to avoid complexity.
+3. **Code Generation Agent**
+   - Input: CodeGenerationPrompt
+   - Generates Python code for AWS SDK interactions
+   - Creates complete code packages including:
+     - Python scripts using boto3
+     - Required dependencies with versions
+     - Minimal IAM policies
+   - Implements code validation and error handling
+   - Uses linter to ensure code quality
 
-4. **Code Generation Agent**
-   - The second step in each iteration loop.
-   - Takes the prompt template and variables from the Prompt Generator Agent.
-   - Generates a Python script, minimal dependency requirements, and an IAM policy (if needed) to safely collect the next piece of data.
-   - Ensures the script is concise, secure, and focused on the task at hand.
-   - Uses linter to fix minor issues and ensure code quality.
-   - If linting fails, passes the code back to the Code Generation Agent for correction along with the error details and previous context.
+4. **Code Execution Agent**
+   - Input: Validated code, dependencies, IAM policy
+   - Sets up isolated execution environment (Docker)
+   - Installs dependencies and manages AWS credentials
+   - Executes code safely with timeout limits
+   - Captures outputs, errors, and resource metrics
+   - Handles execution errors and retries
 
-5. **Code Execution Agent**
-   - The third step in each iteration loop.
-   - Receives the validated Python script, dependencies, and IAM policy (if applicable).
-   - Attempts to run the script in an isolated environment (Docker container or similar).
-   - Captures response data (standard output) and any runtime errors or exceptions.
-   - If the script fails, passes the error details back to the Code Generation Agent for correction.
-   - If successful, returns the output data to the Orchestration Agent.
-
-6. **Data Aggregation & Context Update**
-   - After each successful script execution, the Orchestration Agent updates the global context with the newly collected data.
-   - The system decides whether more data is needed based on the current context and the user request.
-   - If more data is needed, the system loops back to the Prompt Generator Agent to start the next iteration and providing directive feedback based on the current context.
-   - If enough data is collected or the iteration limit is reached, the system finalizes the answer and returns the aggregated data.
+5. **Discovery Analysis Agent**
+   - Input: Execution results, current context
+   - Analyzes collected data for patterns and insights
+   - Identifies missing information and gaps
+   - Provides recommendations for next iteration
+   - Updates global context with analyzed data
+   - Helps guide the orchestration process
 
 ## 3. LANGGRAPH & LANGSMITH INTEGRATION
 
@@ -60,6 +63,7 @@ The system will follow a structured, iterative process to collect data from AWS 
 - Implement StateGraph to manage the iterative workflow
 - Define nodes for each agent (Orchestration, Prompt Generator, Code Generation, Code Execution)
 - Configure state management:
+
   ```python
   class WorkflowState(TypedDict):
       context: dict  # Stores collected data and iteration history
@@ -68,6 +72,7 @@ The system will follow a structured, iterative process to collect data from AWS 
       collected_data: list[dict]
       agent_outputs: dict
   ```
+
 - Define edges between nodes with conditional logic:
   - Orchestration → Prompt Generator (when more data needed)
   - Prompt Generator → Code Generation
@@ -76,6 +81,7 @@ The system will follow a structured, iterative process to collect data from AWS 
   - Orchestration → Final Output (when complete)
 
 ### LangSmith Integration
+
 - Track agent performance and workflow metrics
 - Log each iteration's:
   - Generated prompts
@@ -104,6 +110,7 @@ The system will follow a structured, iterative process to collect data from AWS 
 ## 5. SYSTEM COMPONENTS & AGENTS
 
 1. **Orchestration Agent**
+
 - Input: User request, global state, iteration data
 - Responsibilities:
   - Analyze user requests to identify required cloud information
@@ -121,7 +128,8 @@ The system will follow a structured, iterative process to collect data from AWS 
   - Aggregated results
   - Error handling directives
 
-2. **Prompt Generator Agent**
+1. **Prompt Generator Agent**
+
 - Input: Current state, user request, iteration count
 - Responsibilities:
   - Analyze previous discoveries
@@ -133,7 +141,8 @@ The system will follow a structured, iterative process to collect data from AWS 
   - Success criteria
   - Description
 
-3. **Code Generation Agent**
+1. **Code Generation Agent**
+
 - Input: CodeGenerationPrompt
 - Responsibilities:
   - Generate Python code for AWS SDK interactions
@@ -145,7 +154,8 @@ The system will follow a structured, iterative process to collect data from AWS 
   - Dependencies list
   - IAM policy (if needed)
 
-4. **Code Execution Agent**
+1. **Code Execution Agent**
+
 - Input: Validated code, dependencies, IAM policy
 - Responsibilities:
   - Set up isolated execution environment
@@ -157,6 +167,22 @@ The system will follow a structured, iterative process to collect data from AWS 
   - Execution results
   - Error details (if any)
   - Resource usage metrics
+
+1. **Discovery Analysis Agent**
+
+- Input: Execution results, current context
+- Responsibilities:
+  - Analyze collected data for patterns and insights
+  - Identify missing information and gaps
+  - Evaluate data quality and completeness
+  - Generate recommendations for next iteration
+  - Update global context with new findings
+  - Guide the orchestration process with insights
+- Output:
+  - Analysis results and insights
+  - Data quality assessment
+  - Recommendations for next steps
+  - Updated context information
 
 ## 5.1 REQUIRED COMPONENTS
 
@@ -212,7 +238,8 @@ graph TD
         Validation -->|Failed| CodeGen
         Validation -->|Passed| Executor[Code Execution Agent]
         Executor -->|Error| CodeGen
-        Executor -->|Success| DataAggregation[Data Aggregation]
+        Executor -->|Success| Discovery[Discovery Analysis Agent]
+        Discovery -->|Analysis Complete| DataAggregation[Data Aggregation]
         DataAggregation --> StateUpdate[Update Global State]
         StateUpdate --> Orchestrator
     end
@@ -238,11 +265,13 @@ graph TD
     style PromptGen fill:#98FB98
     style CodeGen fill:#87CEEB
     style Executor fill:#DDA0DD
+    style Discovery fill:#FFD700
 ```
 
 ## 7. ADDITIONAL ENHANCEMENTS
 
 ### Multi-Cloud Support
+
 - Azure integration
   - Azure SDK implementation
   - Azure-specific IAM handling
@@ -251,6 +280,7 @@ graph TD
   - GCP service account management
 
 ### REST API Service
+
 - FastAPI implementation
 - Endpoints:
   - /inspect: Start new inspection
@@ -261,18 +291,21 @@ graph TD
 - API documentation (OpenAPI)
 
 ### Scalability Features
+
 - Kubernetes deployment support
 - Horizontal scaling of execution agents
 - Redis-based state management
 - Job queuing system
 
 ### Cost Optimization
+
 - Resource pooling
 - Execution time limits
 - Cloud resource cleanup
 - Cost tracking per request
 
 ### Additional Features
+
 - Custom plugin system
 - Template library for common scenarios
 - Export results in multiple formats
@@ -281,6 +314,7 @@ graph TD
 ## 8. TRACKING & LOGGING
 
 ### Local Logging
+
 - Standard Python logging configuration
   - File and console handlers
   - JSON formatting for structured logs
@@ -288,6 +322,7 @@ graph TD
   - Rotation policy for log files
 
 ### LangSmith Integration
+
 - Trace model executions
   - Prompt generation steps
   - Code generation attempts

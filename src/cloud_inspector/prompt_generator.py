@@ -47,7 +47,7 @@ class PromptGeneratorAgent:
 
         system_message = """
 You are an expert prompt engineer specializing in cloud infrastructure.
-Your task is to create a clear, detailed prompt that will guide another AI model in generating focused code 
+Your task is to create a clear, detailed prompt that will guide another AI model in generating focused code
 for discovering specific cloud infrastructure information."""
 
         user_message = f"""

@@ -25,6 +25,10 @@ class OrchestrationState(TypedDict):
         updated_at: Last update timestamp
         reason: Completion or failure reason
         params: Additional parameters and variables
+        error_count: Number of errors encountered
+        last_successful_iteration: Last iteration that completed successfully
+        execution_metrics: Metrics about execution time and resource usage
+        retry_attempts: Number of retry attempts for current iteration
     """
 
     messages: Annotated[list, add_messages]
@@ -39,6 +43,10 @@ class OrchestrationState(TypedDict):
     updated_at: datetime
     reason: Optional[str]
     params: dict[str, Any]
+    error_count: int
+    last_successful_iteration: Optional[int]
+    execution_metrics: dict[str, Any]
+    retry_attempts: int
 
 
 def create_initial_state(
@@ -72,4 +80,8 @@ def create_initial_state(
         "updated_at": now,
         "reason": None,
         "params": params or {},
+        "error_count": 0,
+        "last_successful_iteration": None,
+        "execution_metrics": {"start_time": now.isoformat(), "total_execution_time": 0, "resource_usage": {}},
+        "retry_attempts": 0,
     }
