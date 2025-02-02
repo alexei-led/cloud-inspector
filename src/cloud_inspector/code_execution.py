@@ -134,13 +134,19 @@ python /code/main.py
                 container = self.docker.containers.create(  # type: ignore
                     self.image,
                     command=["/code/entrypoint.sh"],
-                    volumes={str(temp_path.absolute()): {"bind": "/code", "mode": "ro"}},
+                    volumes={
+                        str(temp_path.absolute()): {
+                            "bind": "/code", 
+                            "mode": "ro"  # Keep as read-only for security
+                        }
+                    },
                     cpu_quota=int(self.cpu_limit * 100000),
                     mem_limit=self.memory_limit,
                     environment={
                         "PYTHONPATH": "/code",
                         "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if aws_credentials else "",
                         "PYTHONUNBUFFERED": "1",
+                        "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
                     },
                     network_mode="none",  # Isolate network
                     detach=True,
@@ -150,8 +156,11 @@ python /code/main.py
                 container.start()
 
                 try:
+                    logger.debug("Starting container execution")
                     # Wait for completion with timeout
                     result = container.wait(timeout=self.timeout)
+                    status_code = result.get("StatusCode", -1)
+                    error_msg = result.get("Error", {}).get("Message", "")
                     
                     # Get resource usage statistics
                     resource_usage = self._get_container_stats(container)
@@ -159,31 +168,39 @@ python /code/main.py
                     # Get logs
                     logs = container.logs(stdout=True, stderr=True)
                     stdout = logs.decode() if logs else ""
-                    stderr = ""  # In docker-py, stderr is included in stdout when using logs()
+                    stderr = error_msg if error_msg else ""
                     
-                    success = result["StatusCode"] == 0
+                    success = status_code == 0
                     
                     # Try to parse stdout as JSON if execution was successful
                     if success and stdout.strip():
                         try:
                             json.loads(stdout)
-                        except json.JSONDecodeError:
+                            logger.debug("Successfully parsed output as JSON")
+                        except json.JSONDecodeError as e:
                             success = False
-                            stderr = "Output is not in valid JSON format"
+                            stderr = f"Output is not in valid JSON format: {str(e)}"
+                            logger.warning("Code execution output was not valid JSON: %s", str(e))
+                    
+                    if not success:
+                        logger.error("Container execution failed with status %d: %s", 
+                                   status_code, stderr or "No error message provided")
                     
                 except DockerException as e:
-                    success = False
-                    stdout = ""
-                    stderr = f"Execution failed: {str(e)}"
-                    resource_usage = {}
+                    error_msg = f"Docker execution error: {str(e)}"
+                    logger.error(error_msg)
+                    return False, "", error_msg, {}
                 finally:
                     with suppress(DockerException):
                         container.remove(force=True)
+                        logger.debug("Container cleaned up")
 
                 return success, stdout, stderr, resource_usage
 
-            except DockerException as e:
-                return False, "", f"Failed to create container: {str(e)}", {}
+            except (OSError, DockerException) as e:
+                error_msg = f"Failed to prepare or execute container: {str(e)}"
+                logger.error(error_msg)
+                return False, "", error_msg, {}
 
     def cleanup(self):
         """Cleanup any leftover containers."""
@@ -198,8 +215,12 @@ python /code/main.py
                     "status": ["exited", "dead"]
                 }
             )
+            removed = 0
             for container in containers:
                 with suppress(DockerException):
                     container.remove(force=True)
+                    removed += 1
+            if removed:
+                logger.info("Cleaned up %d containers", removed)
         except DockerException as e:
             logger.error(f"Failed to cleanup containers: {e}")
