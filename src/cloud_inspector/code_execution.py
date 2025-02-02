@@ -7,6 +7,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any, Optional
 
+from cloud_inspector.constants import DEFAULT_CPU_LIMIT, DEFAULT_DOCKER_IMAGE, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT
 from langchain_core.prompts.chat import ChatPromptTemplate
 import docker
 from docker.errors import DockerException
@@ -20,10 +21,10 @@ class DockerSandbox:
 
     def __init__(
         self,
-        image: str = "python:3.12-slim",
-        cpu_limit: float = 1,
-        memory_limit: str = "512m",
-        timeout: int = 30,
+        image: str = DEFAULT_DOCKER_IMAGE,
+        cpu_limit: float = DEFAULT_CPU_LIMIT,
+        memory_limit: str = DEFAULT_MEMORY_LIMIT,
+        timeout: int = DEFAULT_TIMEOUT,
     ):
         """Initialize Docker sandbox.
 

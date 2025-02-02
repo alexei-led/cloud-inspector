@@ -22,14 +22,6 @@ class WorkflowStatus(str, Enum):
     WAITING_FOR_FEEDBACK = "waiting_for_feedback"
 
 
-class ExecutionStatus(str, Enum):
-    """Status of code execution."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    TIMEOUT = "timeout"
-
-
 class CodeGenerationPrompt(BaseModel):
     """Prompt for code generation."""
 
@@ -53,10 +45,3 @@ class GeneratedFiles(BaseModel):
     policy_json: str = Field(..., description="IAM policy or configuration settings")
 
 
-class WorkflowConfig(BaseModel):
-    """Configuration for orchestration workflow."""
-
-    max_iterations: int = Field(default=3, description="Maximum number of iterations")
-    timeout_seconds: int = Field(default=300, description="Workflow timeout in seconds")
-    allow_human_feedback: bool = Field(default=False, description="Enable human feedback")
-    state_dir: str = Field(default="orchestration_states", description="Directory for state files")

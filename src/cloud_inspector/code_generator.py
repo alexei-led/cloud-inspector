@@ -140,6 +140,7 @@ class CodeGeneratorAgent:
         """
 
         try:
+            from langchain_core.tracers.context import collect_runs
             # Validate model can generate code
             if not self.model_registry.validate_model_capability(model_name, ModelCapability.CODE_GENERATION):
                 raise ValueError(f"Model '{model_name}' does not support code generation")
@@ -232,7 +233,7 @@ class CodeGeneratorAgent:
             check(decoded, "generated_code", reporter)
 
             if error_output.getvalue():
-                print(f"Pyflakes detected issues:\n{error_output.getvalue()}")
+                logger.warning("Pyflakes detected issues:\n%s", error_output.getvalue())
 
             # Fix imports automatically
             decoded = fix_code(
@@ -255,9 +256,9 @@ class CodeGeneratorAgent:
             decoded = format_str(decoded, mode=FileMode())
 
         except SyntaxError as e:
-            print(f"Warning: Generated Python code has syntax errors: {e}")
+            logger.warning("Generated Python code has syntax errors: %s", e)
         except Exception as e:
-            print(f"Warning: Code formatting failed: {e}")
+            logger.warning("Code formatting failed: %s", e)
 
         return decoded
 
