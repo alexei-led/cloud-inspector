@@ -1,6 +1,6 @@
 import pytest
 from cloud_inspector.orchestration.agent import Agent
-from components.types import CloudProvider
+from components.types import CloudProvider, WorkflowStatus
 
 def test_full_workflow(model_registry, prompt_generator, code_generator, code_executor):
     """Test complete workflow execution."""
