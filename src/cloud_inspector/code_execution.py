@@ -77,10 +77,8 @@ class DockerSandbox:
     def _calculate_cpu_percent(self, stats: dict) -> float:
         """Calculate CPU usage percentage from stats."""
         try:
-            cpu_delta = stats["cpu_stats"]["cpu_usage"]["total_usage"] - \
-                       stats["precpu_stats"]["cpu_usage"]["total_usage"]
-            system_delta = stats["cpu_stats"]["system_cpu_usage"] - \
-                          stats["precpu_stats"]["system_cpu_usage"]
+            cpu_delta = stats["cpu_stats"]["cpu_usage"]["total_usage"] - stats["precpu_stats"]["cpu_usage"]["total_usage"]
+            system_delta = stats["cpu_stats"]["system_cpu_usage"] - stats["precpu_stats"]["system_cpu_usage"]
             if system_delta > 0:
                 return (cpu_delta / system_delta) * 100.0
         except (KeyError, TypeError):
@@ -137,8 +135,8 @@ python /code/main.py
                     command=["/code/entrypoint.sh"],
                     volumes={
                         str(temp_path.absolute()): {
-                            "bind": "/code", 
-                            "mode": "ro"  # Keep as read-only for security
+                            "bind": "/code",
+                            "mode": "ro",  # Keep as read-only for security
                         }
                     },
                     cpu_quota=int(self.cpu_limit * 100000),
@@ -162,17 +160,17 @@ python /code/main.py
                     result = container.wait(timeout=self.timeout)
                     status_code = result.get("StatusCode", -1)
                     error_msg = result.get("Error", {}).get("Message", "")
-                    
+
                     # Get resource usage statistics
                     resource_usage = self._get_container_stats(container)
-                    
+
                     # Get logs
                     logs = container.logs(stdout=True, stderr=True)
                     stdout = logs.decode() if logs else ""
                     stderr = error_msg if error_msg else ""
-                    
+
                     success = status_code == 0
-                    
+
                     # Try to parse stdout as JSON if execution was successful
                     if success and stdout.strip():
                         try:
@@ -182,11 +180,10 @@ python /code/main.py
                             success = False
                             stderr = f"Output is not in valid JSON format: {str(e)}"
                             logger.warning("Code execution output was not valid JSON: %s", str(e))
-                    
+
                     if not success:
-                        logger.error("Container execution failed with status %d: %s", 
-                                   status_code, stderr or "No error message provided")
-                    
+                        logger.error("Container execution failed with status %d: %s", status_code, stderr or "No error message provided")
+
                 except DockerException as e:
                     error_msg = f"Docker execution error: {str(e)}"
                     logger.error(error_msg)
@@ -210,11 +207,7 @@ python /code/main.py
 
         try:
             containers = self.docker.containers.list(  # type: ignore
-                all=True,
-                filters={
-                    "ancestor": self.image,
-                    "status": ["exited", "dead"]
-                }
+                all=True, filters={"ancestor": self.image, "status": ["exited", "dead"]}
             )
             removed = 0
             for container in containers:
