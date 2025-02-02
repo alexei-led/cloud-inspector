@@ -163,8 +163,8 @@ class CodeGeneratorAgent:
                 if missing_vars:
                     raise ValueError("Missing variables:\n" + "\n".join(f"- {var}" for var in missing_vars))
 
-                # Format prompt using PromptManager
-                messages = format_prompt("", prompt, variables)
+                # Format prompt using class method
+                messages = self.format_prompt(prompt, variables, supports_system_prompt=True)
 
                 # Add context from previous results and feedback if available
                 if previous_results:
