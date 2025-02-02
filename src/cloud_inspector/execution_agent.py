@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from cloud_inspector.code_execution import DockerSandbox
-from components.types import GeneratedFiles
+from cloud_inspector.components.types import GeneratedFiles
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class ExecutionResult:
         """Get output as parsed JSON if valid, None otherwise."""
         if not self.success or not self.output:
             return None
-        
+
         if not self.parsed_json:
             try:
                 if isinstance(self.output, str):
@@ -39,7 +39,7 @@ class ExecutionResult:
                 self.success = False
                 self.error = f"Invalid JSON output: {str(e)}"
                 return None
-        
+
         return self.output if isinstance(self.output, dict) else None
 
 
@@ -121,29 +121,13 @@ class CodeExecutionAgent:
                     logger.warning("Code execution output was not valid JSON: %s", str(e))
 
             return ExecutionResult(
-                success=success,
-                output=output,
-                error=stderr if stderr else None,
-                execution_time=execution_time,
-                executed_at=start_time,
-                resource_usage=resource_usage,
-                generated_files=generated_files,
-                parsed_json=parsed_json
+                success=success, output=output, error=stderr if stderr else None, execution_time=execution_time, executed_at=start_time, resource_usage=resource_usage, generated_files=generated_files, parsed_json=parsed_json
             )
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             logger.error(f"Code execution failed: {e}", exc_info=True)
-            return ExecutionResult(
-                success=False,
-                output="",
-                error=str(e),
-                execution_time=execution_time,
-                executed_at=start_time,
-                resource_usage={"execution_time": execution_time},
-                generated_files=generated_files,
-                parsed_json=False
-            )
+            return ExecutionResult(success=False, output="", error=str(e), execution_time=execution_time, executed_at=start_time, resource_usage={"execution_time": execution_time}, generated_files=generated_files, parsed_json=False)
 
     def cleanup(self):
         """Cleanup any resources used by the agent."""

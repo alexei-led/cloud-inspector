@@ -4,16 +4,16 @@ import logging
 from datetime import datetime
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
-
 from langchain.prompts import ChatPromptTemplate
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
+from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt, WorkflowStatus
 from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
-from components.types import CloudProvider, CodeGenerationPrompt, WorkflowStatus
 
 from .state import OrchestrationState
+
+logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 3
 
@@ -53,7 +53,7 @@ def _is_discovery_redundant(current: dict, previous_discoveries: list[dict], age
         bool: True if current discovery is redundant (contained within previous discoveries),
               False if it provides new information.
     """
-    from components.models import ModelRegistry
+    from cloud_inspector.components.models import ModelRegistry
 
     model_registry: ModelRegistry = agents["model_registry"]
     model = model_registry.get_model(agents["model_name"])
@@ -167,39 +167,26 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     """Executes code using CodeExecutionAgent."""
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
-    
+
     try:
         # Execute the generated code
-        execution_result = code_executor.execute_generated_code(
-            generated_files=code_result.generated_files,
-            aws_credentials=agents.get("aws_credentials"),
-            execution_id=f"exec_{state['iteration']}"
-        )
+        execution_result = code_executor.execute_generated_code(generated_files=code_result.generated_files, aws_credentials=agents.get("aws_credentials"), execution_id=f"exec_{state['iteration']}")
 
         if execution_result.success:
             # Try to parse output as JSON
             parsed_output = execution_result.get_parsed_output()
             if parsed_output is not None:
                 # Add parsed discovery to state
-                discovery = {
-                    "output": parsed_output,
-                    "timestamp": datetime.now().isoformat(),
-                    "iteration": state["iteration"],
-                    "execution_time": execution_result.execution_time,
-                    "resource_usage": execution_result.resource_usage
-                }
+                discovery = {"output": parsed_output, "timestamp": datetime.now().isoformat(), "iteration": state["iteration"], "execution_time": execution_result.execution_time, "resource_usage": execution_result.resource_usage}
                 state["discoveries"].append(discovery)
             else:
-                state["outputs"]["error"] = (
-                    execution_result.error or 
-                    "Code execution succeeded but did not produce valid JSON output"
-                )
+                state["outputs"]["error"] = execution_result.error or "Code execution succeeded but did not produce valid JSON output"
         else:
             state["outputs"]["error"] = execution_result.error or "Code execution failed"
 
         # Update execution metrics
         state["execution_metrics"]["resource_usage"].update(execution_result.resource_usage)
-        
+
     except Exception as e:
         logger.exception("Code execution node failed")
         state["outputs"]["error"] = f"Code execution error: {str(e)}"

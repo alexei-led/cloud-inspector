@@ -20,9 +20,8 @@ from pyflakes.api import check
 from pyflakes.reporter import Reporter
 
 # Local imports
-from components.models import ModelCapability, ModelRegistry
-from components.types import CodeGenerationPrompt, GeneratedFiles
-
+from cloud_inspector.components.models import ModelCapability, ModelRegistry
+from cloud_inspector.components.types import CodeGenerationPrompt, GeneratedFiles
 
 logger = logging.getLogger(__name__)
 
@@ -58,16 +57,14 @@ class CodeGeneratorAgent:
         # Create output directory
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-    def format_prompt(self, prompt: CodeGenerationPrompt, 
-                     variables: Optional[dict[str, Any]] = None, 
-                     supports_system_prompt: bool = True) -> list[Any]:
+    def format_prompt(self, prompt: CodeGenerationPrompt, variables: Optional[dict[str, Any]] = None, supports_system_prompt: bool = True) -> list[Any]:
         """Format a prompt for code generation.
-        
+
         Args:
             prompt: The prompt template and metadata
             variables: Variables to inject into the prompt
             supports_system_prompt: Whether the model supports system prompts
-            
+
         Returns:
             List of formatted messages for the model
         """
@@ -76,30 +73,19 @@ class CodeGeneratorAgent:
         variables = variables or {}
         provided_var_names = set(variables.keys())
         missing_vars = required_var_names - provided_var_names
-        
+
         if missing_vars:
-            var_descriptions = {
-                var["name"]: var["description"] 
-                for var in prompt.variables 
-                if var["name"] in missing_vars
-            }
-            raise ValueError(
-                "Missing required variables: " +
-                ", ".join(f"{name} ({desc})" 
-                         for name, desc in var_descriptions.items())
-            )
+            var_descriptions = {var["name"]: var["description"] for var in prompt.variables if var["name"] in missing_vars}
+            raise ValueError("Missing required variables: " + ", ".join(f"{name} ({desc})" for name, desc in var_descriptions.items()))
 
         system_message = f"""You are an expert {prompt.cloud.value} DevOps engineer..."""
 
         if supports_system_prompt:
-            chat_prompt = ChatPromptTemplate.from_messages([
-                ("system", system_message),
-                ("user", prompt.template)
-            ])
+            chat_prompt = ChatPromptTemplate.from_messages([("system", system_message), ("user", prompt.template)])
         else:
             combined_prompt = f"<instructions>{system_message}</instructions>\n\n<question>{prompt.template}</question>"
             chat_prompt = ChatPromptTemplate.from_messages([("user", combined_prompt)])
-        
+
         return chat_prompt.format_messages(**variables)
 
     def _extract_latest_generated_files(self, raw_response: Union[str, list[dict]]) -> dict[str, str]:
@@ -142,6 +128,7 @@ class CodeGeneratorAgent:
 
         try:
             from langchain_core.tracers.context import collect_runs
+
             # Validate model can generate code
             if not self.model_registry.validate_model_capability(model_name, ModelCapability.CODE_GENERATION):
                 raise ValueError(f"Model '{model_name}' does not support code generation")

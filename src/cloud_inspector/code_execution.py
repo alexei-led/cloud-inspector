@@ -5,13 +5,13 @@ import logging
 import tempfile
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-from cloud_inspector.constants import DEFAULT_CPU_LIMIT, DEFAULT_DOCKER_IMAGE, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT
-from langchain_core.prompts.chat import ChatPromptTemplate
 import docker
 from docker.errors import DockerException
 from docker.models.containers import Container
+
+from cloud_inspector.constants import DEFAULT_CPU_LIMIT, DEFAULT_DOCKER_IMAGE, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
