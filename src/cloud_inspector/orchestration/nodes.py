@@ -164,16 +164,42 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     """Executes code using CodeExecutionAgent."""
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
+    
+    try:
+        # Execute the generated code
+        execution_result = code_executor.execute_generated_code(
+            generated_files=code_result.generated_files,
+            aws_credentials=agents.get("aws_credentials"),
+            execution_id=f"exec_{state['iteration']}"
+        )
 
-    # Execute the generated code
-    execution_result = code_executor.execute_generated_code(generated_files=code_result.generated_files, aws_credentials=agents.get("aws_credentials"), execution_id=f"exec_{state['iteration']}")
+        if execution_result.success:
+            # Try to parse output as JSON
+            parsed_output = execution_result.get_parsed_output()
+            if parsed_output is not None:
+                # Add parsed discovery to state
+                discovery = {
+                    "output": parsed_output,
+                    "timestamp": datetime.now().isoformat(),
+                    "iteration": state["iteration"],
+                    "execution_time": execution_result.execution_time,
+                    "resource_usage": execution_result.resource_usage
+                }
+                state["discoveries"].append(discovery)
+            else:
+                state["outputs"]["error"] = (
+                    execution_result.error or 
+                    "Code execution succeeded but did not produce valid JSON output"
+                )
+        else:
+            state["outputs"]["error"] = execution_result.error or "Code execution failed"
 
-    if execution_result.success:
-        # Convert output to dictionary if it's not already
-        discovery = {"output": execution_result.output} if isinstance(execution_result.output, str) else execution_result.output
-        state["discoveries"].append(discovery)
-    else:
-        state["outputs"]["error"] = execution_result.error
+        # Update execution metrics
+        state["execution_metrics"]["resource_usage"].update(execution_result.resource_usage)
+        
+    except Exception as e:
+        logger.exception("Code execution node failed")
+        state["outputs"]["error"] = f"Code execution error: {str(e)}"
 
     state["updated_at"] = datetime.now()
     return state

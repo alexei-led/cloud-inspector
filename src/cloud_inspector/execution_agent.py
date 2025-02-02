@@ -1,5 +1,6 @@
 """Agent for executing generated code in isolated environment."""
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -16,12 +17,30 @@ class ExecutionResult:
     """Result of code execution."""
 
     success: bool
-    output: str
+    output: Any  # Change from str to Any to support parsed JSON
     error: Optional[str]
     execution_time: float
     executed_at: datetime
     resource_usage: dict[str, Any]
     generated_files: GeneratedFiles
+    parsed_json: bool = False  # New field to track if output was successfully parsed as JSON
+
+    def get_parsed_output(self) -> Optional[dict]:
+        """Get output as parsed JSON if valid, None otherwise."""
+        if not self.success or not self.output:
+            return None
+        
+        if not self.parsed_json:
+            try:
+                if isinstance(self.output, str):
+                    self.output = json.loads(self.output)
+                self.parsed_json = True
+            except json.JSONDecodeError as e:
+                self.success = False
+                self.error = f"Invalid JSON output: {str(e)}"
+                return None
+        
+        return self.output if isinstance(self.output, dict) else None
 
 
 class CodeExecutionAgent:
@@ -86,18 +105,30 @@ class CodeExecutionAgent:
             )
 
             execution_time = (datetime.now() - start_time).total_seconds()
-
-            # Add execution time to resource usage
             resource_usage["execution_time"] = execution_time
+
+            # Try to parse JSON output early if execution was successful
+            parsed_json = False
+            output = stdout
+            if success and stdout.strip():
+                try:
+                    output = json.loads(stdout)
+                    parsed_json = True
+                    logger.debug("Successfully parsed execution output as JSON")
+                except json.JSONDecodeError as e:
+                    success = False
+                    stderr = f"Invalid JSON output: {str(e)}"
+                    logger.warning("Code execution output was not valid JSON: %s", str(e))
 
             return ExecutionResult(
                 success=success,
-                output=stdout,
+                output=output,
                 error=stderr if stderr else None,
                 execution_time=execution_time,
                 executed_at=start_time,
                 resource_usage=resource_usage,
                 generated_files=generated_files,
+                parsed_json=parsed_json
             )
 
         except Exception as e:
@@ -111,6 +142,7 @@ class CodeExecutionAgent:
                 executed_at=start_time,
                 resource_usage={"execution_time": execution_time},
                 generated_files=generated_files,
+                parsed_json=False
             )
 
     def cleanup(self):
