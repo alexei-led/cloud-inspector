@@ -1,5 +1,5 @@
 import pytest
-from components.types import CodeGenerationPrompt, CloudProvider
+from cloud_inspector.components.types import CodeGenerationPrompt, CloudProvider
 
 def test_format_prompt(code_generator):
     """Test prompt formatting with valid inputs."""

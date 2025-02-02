@@ -1,11 +1,11 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
-from components.models import ModelRegistry
+from cloud_inspector.components.models import ModelRegistry
 from cloud_inspector.code_generator import CodeGeneratorAgent
 from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
-from components.types import CloudProvider
+from cloud_inspector.components.types import CloudProvider
 from langchain_core.messages import AIMessage
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 from datetime import datetime
 from cloud_inspector.orchestration.state import create_initial_state
-from components.types import CloudProvider, WorkflowStatus
+from cloud_inspector.components.types import CloudProvider, WorkflowStatus
 
 def test_create_initial_state():
     """Test initial state creation."""
