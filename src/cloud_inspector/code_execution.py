@@ -5,8 +5,9 @@ import logging
 import tempfile
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+from langchain_core.prompts.chat import ChatPromptTemplate
 import docker
 from docker.errors import DockerException
 from docker.models.containers import Container
