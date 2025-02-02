@@ -3,6 +3,7 @@
 # Standard library imports
 import ast
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from io import StringIO
@@ -23,6 +24,7 @@ from components.models import ModelCapability, ModelRegistry
 from components.types import CodeGenerationPrompt, GeneratedFiles
 
 
+logger = logging.getLogger(__name__)
 
 
 @dataclass
