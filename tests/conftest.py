@@ -1,6 +1,16 @@
 import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+from langchain_core.messages import AIMessage
+
+# Add src directory to Python path
+src_path = str(Path(__file__).parent.parent / "src")
+if src_path not in sys.path:
+    sys.path.append(src_path)
+
 from cloud_inspector.components.models import ModelRegistry
 from cloud_inspector.code_generator import CodeGeneratorAgent
 from cloud_inspector.execution_agent import CodeExecutionAgent
