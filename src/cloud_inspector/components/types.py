@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -35,6 +35,8 @@ class CodeGenerationPrompt(BaseModel):
     generated_by: Optional[str] = Field(None, description="Model used to generate the prompt")
     generated_at: Optional[datetime] = Field(None, description="Timestamp when the prompt was generated")
     success_criteria: Optional[str] = Field(None, description="Criteria for success in this iteration")
+    feedback: Optional[dict[str, Any]] = Field(None, description="User feedback for the prompt")
+    iteration: Optional[int] = Field(..., description="Current iteration of the prompt generation")
 
 
 class GeneratedFiles(BaseModel):
@@ -43,5 +45,3 @@ class GeneratedFiles(BaseModel):
     main_py: str = Field(..., description="Main Python script containing core logic")
     requirements_txt: str = Field(..., description="Python package dependencies")
     policy_json: str = Field(..., description="IAM policy or configuration settings")
-
-

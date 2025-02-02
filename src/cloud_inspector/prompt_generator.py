@@ -4,8 +4,8 @@ from typing import Any, Optional
 import yaml
 from langchain_core.messages import BaseMessage
 
-from components.models import ModelRegistry
-from components.types import CloudProvider, CodeGenerationPrompt
+from cloud_inspector.components.models import ModelRegistry
+from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt
 
 
 class PromptGeneratorAgent:
@@ -100,7 +100,7 @@ The prompt should be clear, structured, and focused on the current phase goals."
 
         # Remove response_format from model kwargs
         model_kwargs = getattr(model, "model_kwargs", {})
-        if "response_format" in model_kwargs:
+        if isinstance(model_kwargs, dict) and "response_format" in model_kwargs:
             model_kwargs.pop("response_format")
             setattr(model, "model_kwargs", model_kwargs)  # noqa: B010
 
@@ -122,6 +122,8 @@ The prompt should be clear, structured, and focused on the current phase goals."
             generated_at=datetime.now(),
             success_criteria=success_criteria,
             description=description,
+            feedback=feedback,
+            iteration=iteration,
         )
 
     def _determine_next_focus(self, previous_results: Optional[dict[str, Any]]) -> str:
