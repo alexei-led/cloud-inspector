@@ -1,7 +1,10 @@
 """Node functions for orchestration workflow."""
 
+import logging
 from datetime import datetime
 from typing import Any, cast
+
+logger = logging.getLogger(__name__)
 
 from langchain.prompts import ChatPromptTemplate
 
