@@ -123,7 +123,8 @@ class DockerSandbox:
 
             # Create entrypoint script that installs requirements first
             entrypoint_script = """#!/bin/sh
-pip install -r /code/requirements.txt
+set -e  # Exit on any error
+pip install --no-cache-dir -r /code/requirements.txt
 python /code/main.py
 """
             (temp_path / "entrypoint.sh").write_text(entrypoint_script)
