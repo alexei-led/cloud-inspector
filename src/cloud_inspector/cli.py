@@ -7,11 +7,11 @@ from datetime import datetime
 import click
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
+from cloud_inspector.components.models import ModelRegistry
+from cloud_inspector.components.types import CloudProvider
 from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.orchestration.agent import OrchestrationAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
-from components.models import ModelRegistry
-from components.types import CloudProvider
 
 
 class DateTimeEncoder(json.JSONEncoder):

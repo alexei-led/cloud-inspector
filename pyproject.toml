@@ -43,7 +43,7 @@ dev = [
     "pytest-timeout",
     "pytest-xdist",
     "ruff",
-    "setuptools"
+    "setuptools",
 ]
 
 [tool.ruff]
@@ -72,3 +72,22 @@ typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 exclude = [".venv", "./generated_code", "./generated_prompts"]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cloud_inspector*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --tb=short -ra -q"
+pythonpath = ["src"]
+markers = [
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow running",
+]

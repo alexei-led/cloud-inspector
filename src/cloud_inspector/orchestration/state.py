@@ -6,7 +6,7 @@ from typing import Annotated, Any, Optional
 from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 
-from components.types import CloudProvider, WorkflowStatus
+from cloud_inspector.components.types import CloudProvider, WorkflowStatus
 
 
 class OrchestrationState(TypedDict):

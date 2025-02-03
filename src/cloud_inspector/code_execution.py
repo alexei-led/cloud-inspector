@@ -43,10 +43,18 @@ class DockerSandbox:
     def _ensure_image(self):
         """Ensure Docker image is available."""
         try:
-            self.docker.images.get(self.image) if self.docker else None
-        except DockerException:
-            logger.info(f"Pulling image {self.image}")
-            self.docker.images.pull(self.image) if self.docker else None
+            if self.docker:
+                self.docker.images.get(self.image)
+        except DockerException as e:
+            logger.info(f"Pulling image {self.image}: {e}")
+            try:
+                if self.docker:
+                    self.docker.images.pull(self.image)
+                    # Verify the image is now available
+                    self.docker.images.get(self.image)
+            except DockerException as e:
+                logger.error(f"Failed to pull Docker image {self.image}: {e}")
+                raise
 
     def _init_docker(self) -> bool:
         """Initialize Docker client and ensure image is available.
@@ -61,6 +69,7 @@ class DockerSandbox:
                 return True
             except DockerException as e:
                 logger.error(f"Failed to initialize Docker: {e}")
+                self.docker = None
                 return False
         return True
 
@@ -166,10 +175,18 @@ python /code/main.py
                     # Get resource usage statistics
                     resource_usage = self._get_container_stats(container)
 
-                    # Get logs
-                    logs = container.logs(stdout=True, stderr=True)
-                    stdout = logs.decode() if logs else ""
-                    stderr = error_msg if error_msg else ""
+                    # Get logs with separate stdout and stderr
+                    stdout_logs = container.logs(stdout=True, stderr=False)
+                    stderr_logs = container.logs(stdout=False, stderr=True)
+
+                    stdout = stdout_logs.decode() if stdout_logs else ""
+                    stderr = stderr_logs.decode() if stderr_logs else ""
+
+                    # Combine stderr with error message if both exist
+                    if error_msg and stderr:
+                        stderr = f"{stderr}\nContainer Error: {error_msg}"
+                    elif error_msg:
+                        stderr = error_msg
 
                     success = status_code == 0
 

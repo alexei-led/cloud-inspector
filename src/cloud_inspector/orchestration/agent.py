@@ -7,15 +7,15 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
+from cloud_inspector.components.types import CloudProvider
 from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
-from components.types import CloudProvider
 
 from .nodes import code_execution_node, code_generation_node, discovery_analysis_node, orchestration_node, prompt_generation_node
 from .state import create_initial_state
 
 
-class Agent:
+class OrchestrationAgent:
     def __init__(self, model_name: str, prompt_generator: PromptGeneratorAgent, code_generator: CodeGeneratorAgent, code_executor: CodeExecutionAgent, checkpointer: Optional[MemorySaver] = None):
         self.model_name = model_name
         self.prompt_generator = prompt_generator

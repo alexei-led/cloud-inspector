@@ -156,8 +156,10 @@ The prompt should be clear, structured, and focused on the current phase goals."
             # Parse YAML content
             data = yaml.safe_load(content)
 
-            # Extract template and variables
+            # Extract and validate template
             template = data.get("template", "").strip()
+            if not template:
+                raise ValueError("Missing required field: template")
 
             # Parse any new variables from response
             vars = []

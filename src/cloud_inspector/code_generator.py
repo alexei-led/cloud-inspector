@@ -16,6 +16,7 @@ from autoflake import fix_code
 from black import FileMode, format_str
 from langchain_core.messages.base import BaseMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
+from pydantic import BaseModel
 from pyflakes.api import check
 from pyflakes.reporter import Reporter
 
@@ -106,6 +107,47 @@ class CodeGeneratorAgent:
             raise ParseError("No GeneratedFiles content found")
         return latest_files
 
+    def _validate_model(self, model_name: str) -> None:
+        """Validate model capabilities for code generation."""
+        if not self.model_registry.validate_model_capability(model_name, ModelCapability.CODE_GENERATION):
+            raise ValueError(f"Model '{model_name}' does not support code generation")
+
+    def _prepare_messages(self, prompt: CodeGenerationPrompt, variables: dict[str, Any], previous_results: Optional[dict[str, Any]] = None, feedback: Optional[dict[str, Any]] = None) -> list[Any]:
+        """Prepare messages for the model including context and feedback."""
+        messages = self.format_prompt(prompt, variables, supports_system_prompt=True)
+
+        if previous_results:
+            context = "Previous execution results:\n" + json.dumps(previous_results, indent=2)
+            messages.append({"role": "user", "content": context})
+        if feedback:
+            feedback_msg = "User feedback:\n" + json.dumps(feedback, indent=2)
+            messages.append({"role": "user", "content": feedback_msg})
+
+        return messages
+
+    def _process_model_response(self, response: Union[dict[str, Any], BaseModel]) -> dict[str, str]:
+        """Process and format the model's response."""
+        # Convert BaseModel to dict if needed
+        if isinstance(response, BaseModel):
+            response = response.dict()
+        elif not isinstance(response, dict):
+            raise ParseError("Expected dictionary or BaseModel response format")
+
+        if response.get("parsed") is not None:
+            return {
+                "main.py": self._reformat_code(response["parsed"].main_py, code=True),
+                "requirements.txt": self._reformat_code(response["parsed"].requirements_txt),
+                "policy.json": self._reformat_code(response["parsed"].policy_json),
+            }
+
+        raw_response = response.get("raw", "").content if isinstance(response.get("raw"), BaseMessage) else str(response.get("raw", ""))
+        latest_files = self._extract_latest_generated_files(raw_response)
+        return {
+            "main.py": self._reformat_code(latest_files["main_py"], code=True),
+            "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
+            "policy.json": self._reformat_code(latest_files["policy_json"]),
+        }
+
     def generate_code(
         self,
         prompt: CodeGenerationPrompt,
@@ -115,78 +157,24 @@ class CodeGeneratorAgent:
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
     ) -> tuple[CodeGeneratorResult, Path]:
-        """Execute the code generation workflow.
-
-        Args:
-            prompt_template: The prompt template to use for code generation
-            model_name: Name of the model to use for code generation
-            variables: Variables to inject into the prompt (request, service, iteration)
-            iteration_id: Optional ID to track this iteration
-            previous_results: Optional dict containing data discovered in previous iterations
-            feedback: Optional dict containing user feedback/direction for this iteration
-        """
-
+        """Execute the code generation workflow."""
         try:
             from langchain_core.tracers.context import collect_runs
 
-            # Validate model can generate code
-            if not self.model_registry.validate_model_capability(model_name, ModelCapability.CODE_GENERATION):
-                raise ValueError(f"Model '{model_name}' does not support code generation")
+            self._validate_model(model_name)
 
             with collect_runs() as runs_cb:
-                tags = ["code_generation", variables.get("service", ""), model_name]
-                if iteration_id:
-                    tags.append(f"iteration_{iteration_id}")
-
                 model = self.model_registry.get_model(model_name)
-
-                # Validate all variables are provided
-                missing_vars = []
-                for var in prompt.variables:
-                    if var["name"] not in variables:
-                        if var.get("value"):  # Use value from template if available
-                            variables[var["name"]] = var["value"]
-                        else:
-                            missing_vars.append(f"{var['name']} ({var['description']})")
-
-                if missing_vars:
-                    raise ValueError("Missing variables:\n" + "\n".join(f"- {var}" for var in missing_vars))
-
-                # Format prompt using class method
-                messages = self.format_prompt(prompt, variables, supports_system_prompt=True)
-
-                # Add context from previous results and feedback if available
-                if previous_results:
-                    context = "Previous execution results:\n" + json.dumps(previous_results, indent=2)
-                    messages.append({"role": "user", "content": context})
-                if feedback:
-                    feedback_msg = "User feedback:\n" + json.dumps(feedback, indent=2)
-                    messages.append({"role": "user", "content": feedback_msg})
-
                 structured_output_params = self.model_registry.get_structured_output_params(model_name, GeneratedFiles)
+
                 if not structured_output_params.get("include_raw"):
                     raise ValueError("include_raw must be True in model definition for token limit handling")
 
-                structured_model = model.with_structured_output(GeneratedFiles, **structured_output_params)  # type: ignore
-
+                messages = self._prepare_messages(prompt, variables, previous_results, feedback)
+                structured_model = model.with_structured_output(GeneratedFiles, **structured_output_params)
                 response = structured_model.invoke(messages)
-                if not isinstance(response, dict):
-                    raise ParseError("Expected dictionary response format")
 
-                if response.get("parsed") is not None:
-                    generated_files = {
-                        "main.py": self._reformat_code(response["parsed"].main_py, code=True),
-                        "requirements.txt": self._reformat_code(response["parsed"].requirements_txt),
-                        "policy.json": self._reformat_code(response["parsed"].policy_json),
-                    }
-                else:
-                    raw_response = response.get("raw", "").content if isinstance(response.get("raw"), BaseMessage) else str(response.get("raw", ""))
-                    latest_files = self._extract_latest_generated_files(raw_response)
-                    generated_files = {
-                        "main.py": self._reformat_code(latest_files["main_py"], code=True),
-                        "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
-                        "policy.json": self._reformat_code(latest_files["policy_json"]),
-                    }
+                generated_files = self._process_model_response(response)
 
                 result = CodeGeneratorResult(
                     prompt_template=prompt.template,
