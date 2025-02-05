@@ -1,14 +1,14 @@
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
-from langchain_core.messages import HumanMessage, SystemMessage
 from black.parsing import InvalidInput
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult, ParseError
+from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult
 from cloud_inspector.components.models import ModelCapability, ModelRegistry
 from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt, GeneratedFiles
 
@@ -50,9 +50,16 @@ def test_prompt():
 # Test prompt formatting and validation
 def test_format_prompt_with_default_values(generator, test_prompt):
     """Test that prompt formatting uses default values from template variables"""
+    # Find variables with default values
+    default_vars = {var["name"]: var["value"] for var in test_prompt.variables if "value" in var}
+
+    # Combine provided and default variables
+    variables = {"service": "lambda"}
+    variables.update(default_vars)
+
     messages = generator.format_prompt(
         test_prompt,
-        variables={"service": "lambda"},  # environment has default value
+        variables=variables,
         supports_system_prompt=True,
     )
     assert any("dev" in str(msg.content) for msg in messages)
@@ -91,33 +98,59 @@ def test_generate_code_model_validation(generator, test_prompt):
 
 
 def test_generate_code_structured_output_parsing(generator, test_prompt):
-    """Test end-to-end code generation with structured output"""
+    """Test the complete workflow of code generation with structured output."""
+    # Setup mock model and response
     mock_model = Mock()
-    mock_model.with_structured_output.return_value.invoke.return_value = {"parsed": GeneratedFiles(main_py="def test(): pass", requirements_txt="requests==2.0.0", policy_json="{}")}
+    mock_structured_model = Mock()
+    mock_model.with_structured_output.return_value = mock_structured_model
+
+    # Setup expected response
+    expected_files = GeneratedFiles(main_py="def handler(event, context):\n    return {'statusCode': 200}", requirements_txt="aws-lambda-powertools==2.0.0", policy_json='{"Version": "2012-10-17"}')
+    mock_structured_model.invoke.return_value = {"parsed": expected_files}
     generator.model_registry.get_model.return_value = mock_model
 
-    result, _ = generator.generate_code(prompt=test_prompt, model_name="test-model", variables={"service": "lambda"}, iteration_id="test-1")
+    # Setup run tracking mock
+    mock_run = Mock()
+    mock_run.id = "test-run-id"
+    mock_runs_cb = Mock()
+    mock_runs_cb.traced_runs = [mock_run]
 
-    assert "def test():" in result.generated_files["main.py"]
-    assert "requests==2.0.0" in result.generated_files["requirements.txt"]
+    variables = {"service": "lambda", "environment": "dev"}
 
+    # Create a proper context manager mock for collect_runs
+    mock_ctx_manager = MagicMock()
+    mock_ctx_manager.__enter__.return_value = mock_runs_cb
+    mock_ctx_manager.__exit__.return_value = None
 
-def test_generate_code_raw_response_parsing(generator, test_prompt):
-    """Test parsing raw response when structured parsing fails"""
-    mock_model = Mock()
-    mock_model.with_structured_output.return_value.invoke.return_value = {
-        "parsed": None,
-        "raw": [
-            {"type": "tool_use", "name": "GeneratedFiles", "input": {"main_py": "def v1(): pass", "requirements_txt": "pkg1", "policy_json": "{}"}},
-            {"type": "tool_use", "name": "GeneratedFiles", "input": {"main_py": "def v2(): pass", "requirements_txt": "pkg2", "policy_json": "{}"}},
-        ],
-    }
-    generator.model_registry.get_model.return_value = mock_model
+    with patch("langchain_core.tracers.context.collect_runs", return_value=mock_ctx_manager):
+        result, output_dir = generator.generate_code(prompt=test_prompt, model_name="test-model", variables=variables, iteration_id="test-1")
 
-    result, _ = generator.generate_code(prompt=test_prompt, model_name="test-model", variables={"service": "lambda"}, iteration_id="test-1")
+        # Verify model validation was called
+        generator.model_registry.validate_model_capability.assert_called_once_with("test-model", ModelCapability.CODE_GENERATION)
 
-    assert "def v2():" in result.generated_files["main.py"]
-    assert result.generated_files["requirements.txt"] == "pkg2"
+        # Verify structured output params were checked
+        generator.model_registry.get_structured_output_params.assert_called_once()
+
+        # Verify model was configured correctly
+        mock_model.with_structured_output.assert_called_once()
+
+        # Verify result contains expected data
+        assert result.model_name == "test-model"
+        assert result.iteration_id == "test-1"
+        assert result.run_id == "test-run-id"
+        assert isinstance(result.generated_at, datetime)
+
+        # Verify files were processed and formatted
+        assert "handler" in result.generated_files["main.py"]
+        assert "aws-lambda-powertools" in result.generated_files["requirements.txt"]
+        assert "2012-10-17" in result.generated_files["policy.json"]
+
+        # Verify output directory was created
+        assert output_dir.exists()
+        assert (output_dir / "main.py").exists()
+        assert (output_dir / "requirements.txt").exists()
+        assert (output_dir / "policy.json").exists()
+        assert (output_dir / "metadata.json").exists()
 
 
 # Test code formatting and validation
@@ -131,14 +164,14 @@ def test_reformat_code_python_syntax_error(generator):
 def test_reformat_code_import_cleanup(generator):
     """Test cleanup of Python imports"""
     messy_code = """
-    from os import *
-    import sys
-    import os.path
-    from datetime import datetime, datetime
+from os import *
+import sys
+import os.path
+from datetime import datetime, datetime
 
-    def test():
-        print("hello")
-    """
+def test():
+    print("hello")
+"""
     formatted = generator._reformat_code(messy_code, code=True)
     assert "from os import *" not in formatted
     assert formatted.count("import") < 4  # Should combine/remove duplicate imports
@@ -180,7 +213,9 @@ def test_process_model_response_base_model(generator):
         parsed: GeneratedFiles
         raw: Optional[str] = None
 
-    response = TestResponse(parsed=GeneratedFiles(main_py="def test(): pass", requirements_txt="requests==2.0.0", policy_json="{}"))
+    # Create a response with GeneratedFiles that will be converted to dict
+    files_content = GeneratedFiles(main_py="def test(): pass", requirements_txt="requests==2.0.0", policy_json="{}")
+    response = TestResponse(parsed=files_content)
 
     files = generator._process_model_response(response)
     assert "def test():" in files["main.py"]

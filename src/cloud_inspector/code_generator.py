@@ -129,15 +129,16 @@ class CodeGeneratorAgent:
         """Process and format the model's response."""
         # Convert BaseModel to dict if needed
         if isinstance(response, BaseModel):
-            response = response.dict()
+            response = response.model_dump()
         elif not isinstance(response, dict):
             raise ParseError("Expected dictionary or BaseModel response format")
 
         if response.get("parsed") is not None:
+            parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
             return {
-                "main.py": self._reformat_code(response["parsed"].main_py, code=True),
-                "requirements.txt": self._reformat_code(response["parsed"].requirements_txt),
-                "policy.json": self._reformat_code(response["parsed"].policy_json),
+                "main.py": self._reformat_code(parsed["main_py"], code=True),
+                "requirements.txt": self._reformat_code(parsed["requirements_txt"]),
+                "policy.json": self._reformat_code(parsed["policy_json"]),
             }
 
         raw_response = response.get("raw", "").content if isinstance(response.get("raw"), BaseMessage) else str(response.get("raw", ""))
@@ -211,25 +212,28 @@ class CodeGeneratorAgent:
             if error_output.getvalue():
                 logger.warning("Pyflakes detected issues:\n%s", error_output.getvalue())
 
-            # Fix imports automatically
-            decoded = fix_code(
-                decoded,
-                remove_all_unused_imports=True,
-                remove_unused_variables=True,
-                expand_star_imports=True,  # Expand * imports for better clarity
-            )
+            try:
+                # Try black formatting first
+                formatted = format_str(decoded, mode=FileMode())
+                # Only apply additional formatting if black succeeds
+                decoded = fix_code(
+                    formatted,
+                    remove_all_unused_imports=True,
+                    remove_unused_variables=True,
+                    expand_star_imports=True,  # Expand * imports for better clarity
+                )
 
-            # Apply autopep8 fixes for other issues
-            decoded = autopep8.fix_code(
-                decoded,
-                options={
-                    "aggressive": 2,  # More aggressive fixes
-                    "max_line_length": 100,
-                },
-            )
-
-            # Final formatting with black
-            decoded = format_str(decoded, mode=FileMode())
+                # Apply autopep8 fixes for other issues
+                return autopep8.fix_code(
+                    decoded,
+                    options={
+                        "aggressive": 2,  # More aggressive fixes
+                        "max_line_length": 100,
+                    },
+                )
+            except ValueError as e:
+                logger.warning("Black formatting failed: %s", e)
+                return model_response  # Return original code if black fails
 
         except SyntaxError as e:
             logger.warning("Generated Python code has syntax errors: %s", e)

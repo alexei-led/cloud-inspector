@@ -84,10 +84,37 @@ namespaces = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
-addopts = "-v --tb=short -ra -q"
+# Add more detailed test settings
+addopts = """
+    -v
+    --tb=short
+    -ra
+    -q
+    --cov=cloud_inspector
+    --cov-report=term-missing
+    --cov-report=html
+    --asyncio-mode=strict
+"""
 pythonpath = ["src"]
 markers = [
     "unit: marks tests as unit tests",
     "integration: marks tests as integration tests",
     "slow: marks tests as slow running",
+]
+# Add timeout settings
+timeout = 300
+
+[tool.coverage.run]
+source = ["cloud_inspector"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
 ]
