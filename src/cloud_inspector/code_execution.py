@@ -43,7 +43,11 @@ class DockerSandbox:
     def _ensure_image(self):
         """Ensure Docker image is available."""
         try:
-            if self.docker:
+            try:
+                if self.docker:
+                    self.docker.images.get(self.image)
+            except docker.errors.ImageNotFound:
+                self.docker.images.pull(self.image)
                 self.docker.images.get(self.image)
         except DockerException as e:
             logger.info(f"Pulling image {self.image}: {e}")
@@ -141,29 +145,33 @@ python /code/main.py
 
             # Create and run container
             try:
-                container = self.docker.containers.create(  # type: ignore
-                    self.image,
-                    command=["/code/entrypoint.sh"],
-                    volumes={
-                        str(temp_path.absolute()): {
-                            "bind": "/code",
-                            "mode": "ro",  # Keep as read-only for security
-                        }
-                    },
-                    cpu_quota=int(self.cpu_limit * 100000),
-                    mem_limit=self.memory_limit,
-                    environment={
-                        "PYTHONPATH": "/code",
-                        "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if aws_credentials else "",
-                        "PYTHONUNBUFFERED": "1",
-                        "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
-                    },
-                    network_mode="none",  # Isolate network
-                    detach=True,
-                    working_dir="/code",
-                )
+                try:
+                    container = self.docker.containers.create(  # type: ignore
+                        self.image,
+                        command=["/code/entrypoint.sh"],
+                        volumes={
+                            str(temp_path.absolute()): {
+                                "bind": "/code",
+                                "mode": "ro",  # Keep as read-only for security
+                            }
+                        },
+                        cpu_quota=int(self.cpu_limit * 100000),
+                        mem_limit=self.memory_limit,
+                        environment={
+                            "PYTHONPATH": "/code",
+                            "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if aws_credentials else "",
+                            "PYTHONUNBUFFERED": "1",
+                            "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
+                        },
+                        network_mode="none",  # Isolate network
+                        detach=True,
+                        working_dir="/code",
+                    )
 
-                container.start()
+                    container.start()
+                except Exception as exc:
+                    logger.error("Failed to create or start container: %s", exc)
+                    return False, "", f"Container start error: {str(exc)}", {}
 
                 try:
                     logger.debug("Starting container execution")
