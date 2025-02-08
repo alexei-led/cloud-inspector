@@ -20,7 +20,7 @@ MAX_ITERATIONS = 3
 
 def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Analyzes new discoveries against all previous findings to determine uniqueness."""
-    if not state["discoveries"] or state.get("status") != "in_progress":
+    if not state["discoveries"] or state.get("status") != WorkflowStatus.IN_PROGRESS:
         return state
 
     current_discovery = state["discoveries"][-1]
@@ -38,6 +38,9 @@ def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -
         state["reason"] = "no_new_information_found"
         # Remove the redundant discovery
         state["discoveries"].pop()
+        # Copy last successful discovery output to outputs
+        if state["discoveries"]:
+            state["outputs"].update(state["discoveries"][-1]["output"])
 
     state["updated_at"] = datetime.now()
     return state
@@ -91,31 +94,46 @@ def orchestration_node(state: OrchestrationState, agents: dict[str, Any]) -> Orc
     start_time = datetime.fromisoformat(state["execution_metrics"]["start_time"])
     state["execution_metrics"]["total_execution_time"] = (now - start_time).total_seconds()
 
-    if state.get("status") != "in_progress":
+    # If status is already final, do nothing
+    if state.get("status") in [WorkflowStatus.COMPLETED, WorkflowStatus.FAILED]:
+        return state
+
+    # Validate workflow state
+    if state.get("status") != WorkflowStatus.IN_PROGRESS:
+        state["status"] = WorkflowStatus.FAILED
+        state["reason"] = "invalid_workflow_state"
+        state["updated_at"] = now
         return state
 
     # Handle errors and retries
     if state["outputs"].get("error"):
         state["error_count"] += 1
+        state["retry_attempts"] += 1
 
-        # Check if we can retry
         if state["retry_attempts"] < 2:  # Allow up to 2 retries
-            state["retry_attempts"] += 1
-            state["outputs"]["error"] = None  # Clear error for retry
+            # Clear error for retry
+            state["outputs"].pop("error")
             state["updated_at"] = now
             return state
 
+        # Max retries reached - update final state with error
         state["status"] = WorkflowStatus.FAILED
         state["reason"] = f"error_in_iteration_{state['iteration']}_after_{state['retry_attempts']}_retries"
+        # Keep error in outputs for final state
+        error_msg = state["outputs"]["error"]
+        state["outputs"].clear()  # Clear other outputs
+        state["outputs"]["error"] = error_msg  # Preserve just the error
+        state["updated_at"] = now
         return state
 
-    # Check maximum iterations as a safety limit
+    # Check maximum iterations
     if state["iteration"] >= MAX_ITERATIONS:
         state["status"] = WorkflowStatus.COMPLETED
         state["reason"] = "max_iterations_reached"
+        state["updated_at"] = now
         return state
 
-    # Successful iteration
+    # Update successful iteration state
     state["last_successful_iteration"] = state["iteration"]
     state["retry_attempts"] = 0  # Reset retry counter
     state["iteration"] += 1
@@ -170,7 +188,9 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 
     try:
         # Execute the generated code
-        execution_result = code_executor.execute_generated_code(generated_files=code_result.generated_files, aws_credentials=agents.get("aws_credentials"), execution_id=f"exec_{state['iteration']}")
+        generated_files = code_result[0]["generated_files"] if isinstance(code_result, tuple) else code_result["generated_files"]
+
+        execution_result = code_executor.execute_generated_code(generated_files=generated_files, aws_credentials=agents.get("aws_credentials"), execution_id=f"exec_{state['iteration']}")
 
         if execution_result.success:
             # Try to parse output as JSON
