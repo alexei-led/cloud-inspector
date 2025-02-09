@@ -22,18 +22,39 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[dev]
 
+      # Run linting with Ruff
       - name: Lint with ruff
-        uses: chartboost/ruff-action@v1
+        run: ruff .
 
+      # Generate the Ruff badge based on lint results
+      - name: Generate Ruff Badge
+        run: |
+          pip install pybadges
+          if ruff .; then
+            pybadges --left "Ruff" --right "passing" --right-color green > ruff.svg
+          else
+            pybadges --left "Ruff" --right "failing" --right-color red > ruff.svg
+          fi
+
+      # Run tests and generate coverage reports
       - name: Run tests with coverage
         run: |
           pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term --cov-report=html
 
-      - name: Upload coverage report
+      # Generate the coverage badge
+      - name: Generate Coverage Badge
+        run: |
+          pip install coverage-badge
+          coverage-badge -o coverage.svg
+
+      # Optionally, upload artifacts (coverage reports and badges)
+      - name: Upload coverage report and badges
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
+          name: coverage-and-badges
           path: |
             coverage.xml
             htmlcov/
+            coverage.svg
+            ruff.svg
           retention-days: 14
