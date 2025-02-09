@@ -180,11 +180,20 @@ def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) ->
 
 def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Generates code using CodeGeneratorAgent."""
+    # If workflow is not active or the prompt wasn't generated, skip code generation.
+    if state.get("status") != WorkflowStatus.IN_PROGRESS or "prompt" not in state["outputs"]:
+        return state
+
     try:
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
 
-        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
+        result = code_generator.generate_code(
+            prompt=prompt,
+            model_name=agents["model_name"],
+            variables=state["params"],
+            iteration_id=f"iter_{state['iteration']}"
+        )
 
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
