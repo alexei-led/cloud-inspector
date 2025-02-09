@@ -17,6 +17,7 @@ jobs:
 
       # Cache the virtual environment
       - name: Cache virtual environment
+        id: cache-venv
         uses: actions/cache@v4
         with:
           path: |
@@ -28,10 +29,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m venv .venv
+          # Create venv only if it doesn't exist
+          if [ ! -d ".venv" ]; then
+            python -m venv .venv
+          fi
           source .venv/bin/activate
           python -m pip install --upgrade pip
-          pip install .[dev]
+          # Install dependencies only if cache was not hit
+          if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
+            pip install .[dev]
+          fi
 
       # Combined lint and test step
       - name: Run validation
@@ -61,19 +68,15 @@ jobs:
       - name: Generate Badges
         run: |
           source .venv/bin/activate
-          pip install pybadges coverage-badge
+          pip install anybadge coverage-badge
 
-          # Generate Ruff badge using Python
+          # Generate Ruff badge using anybadge
           python -c '
-          from pybadges import badge
+          from anybadge import Badge
           status = "passing" if "${{ steps.validate.outputs.ruff_status }}" == "0" else "failing"
           color = "green" if status == "passing" else "red"
-          with open("ruff.svg", "w") as f:
-              f.write(badge(
-                  label="Ruff",
-                  message=status,
-                  message_color=color
-              ))
+          badge = Badge("Ruff", status, default_color=color)
+          badge.write_badge("ruff.svg")
           '
 
           # Generate coverage badge
