@@ -29,66 +29,23 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Create venv only if it doesn't exist
           if [ ! -d ".venv" ]; then
             python -m venv .venv
           fi
           source .venv/bin/activate
           python -m pip install --upgrade pip
-          # Install dependencies only if cache was not hit
           if [ "${{ steps.cache-venv.outputs.cache-hit }}" != "true" ]; then
             pip install .[dev]
           fi
 
-      # Combined lint and test step
       - name: Run validation
         id: validate
         run: |
           source .venv/bin/activate
-          # Run linting and capture exit code
           ruff check . --ignore=C901
-          RUFF_EXIT=$?
+          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term
 
-          # Run tests and capture exit code
-          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term --cov-report=html
-          TEST_EXIT=$?
-
-          # Store results for badge generation
-          echo "ruff_status=$RUFF_EXIT" >> $GITHUB_OUTPUT
-          echo "test_status=$TEST_EXIT" >> $GITHUB_OUTPUT
-
-          # Calculate coverage percentage for badge
-          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(root.attrib['line-rate'])")
-          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
-
-          # Exit with failure if either check failed
-          [ $RUFF_EXIT -eq 0 ] && [ $TEST_EXIT -eq 0 ]
-
-      # Generate badges based on results
-      - name: Generate Badges
-        run: |
-          source .venv/bin/activate
-          pip install anybadge coverage-badge
-
-          # Generate Ruff badge using anybadge
-          python -c '
-          from anybadge import Badge
-          status = "passing" if "${{ steps.validate.outputs.ruff_status }}" == "0" else "failing"
-          color = "green" if status == "passing" else "red"
-          badge = Badge("Ruff", status, default_color=color)
-          badge.write_badge("ruff.svg")
-          '
-
-          # Generate coverage badge
-          coverage-badge -o coverage.svg
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-and-badges
-          path: |
-            coverage.xml
-            htmlcov/
-            coverage.svg
-            ruff.svg
-          retention-days: 14
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
