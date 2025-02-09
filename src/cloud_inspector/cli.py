@@ -41,6 +41,8 @@ def setup_logging(log_level: str) -> None:
     help="Set the logging level.",
 )
 @click.option("--project", default="cloud-inspector", help="LangSmith project name for tracing.")
+@click.option("--credentials-file", type=click.Path(exists=True, readable=True), help="Path to a JSON or YAML file containing cloud credentials (e.g. AWS keys).")
+@click.option("--cloud-context", type=str, help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription).")
 @click.pass_context
 def cli(ctx: click.Context, log_level: str, project: str) -> None:
     """Cloud Inspector - AWS Code Generation Tool.
@@ -126,10 +128,33 @@ def execute(
     thread_id: str,
 ):
     """Execute cloud inspection workflow."""
+    # Initialize an empty credentials dict.
+    credentials = {}
+    if credentials_file:
+        with open(credentials_file, "r") as f:
+            content = f.read()
+            try:
+                credentials = json.loads(content)
+            except json.JSONDecodeError:
+                credentials = yaml.safe_load(content)
+
+    # Combine extra parameters if provided.
+    extra_params = {}
+    if credentials:
+        extra_params["credentials"] = credentials
+    if cloud_context:
+        extra_params["cloud_context"] = cloud_context
+
     agent = OrchestrationAgent(code_generator=ctx.obj["code_generator"], prompt_generator=ctx.obj["prompt_generator"], code_executor=ctx.obj["code_executor"], model_name=model)
 
     try:
-        result = agent.execute(request=request, cloud=cloud, service=service, thread_id=thread_id)
+        result = agent.execute(
+            request=request,
+            cloud=cloud,
+            service=service,
+            thread_id=thread_id,
+            params=extra_params if extra_params else None,
+        )
 
         click.echo(json.dumps(result, indent=2, cls=DateTimeEncoder))
     except ValueError as e:

@@ -210,6 +210,7 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
         return state
 
+    aws_credentials = agents.get("aws_credentials") or state.get("params", {}).get("credentials")
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
@@ -217,7 +218,11 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
         # Execute the generated code
         generated_files = code_result[0]["generated_files"] if isinstance(code_result, tuple) else code_result["generated_files"]
 
-        execution_result = code_executor.execute_generated_code(generated_files=generated_files, aws_credentials=agents.get("aws_credentials"), execution_id=f"exec_{state['iteration']}")
+        execution_result = code_executor.execute_generated_code(
+            generated_files=generated_files,
+            aws_credentials=aws_credentials,
+            execution_id=f"exec_{state['iteration']}"
+        )
 
         if execution_result.success:
             # Try to parse output as JSON
