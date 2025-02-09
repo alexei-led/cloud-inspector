@@ -1,54 +1,63 @@
 name: Validate
-
 on:
   push:
     branches:
       - "**"
-
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install .[dev]
 
-      # Run linting with Ruff
-      - name: Lint with ruff
-        run: ruff check . --ignore=C901
+      # Combined lint and test step
+      - name: Run validation
+        id: validate
+        run: |
+          # Run linting and capture exit code
+          ruff check . --ignore=C901
+          RUFF_EXIT=$?
 
-      # Generate the Ruff badge based on lint results
-      - name: Generate Ruff Badge
+          # Run tests and capture exit code
+          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term --cov-report=html
+          TEST_EXIT=$?
+
+          # Store results for badge generation
+          echo "ruff_status=$RUFF_EXIT" >> $GITHUB_OUTPUT
+          echo "test_status=$TEST_EXIT" >> $GITHUB_OUTPUT
+
+          # Calculate coverage percentage for badge
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(root.attrib['line-rate'])")
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+          # Exit with failure if either check failed
+          [ $RUFF_EXIT -eq 0 ] && [ $TEST_EXIT -eq 0 ]
+
+      # Generate badges based on results
+      - name: Generate Badges
         run: |
           pip install pybadges
-          if ruff .; then
+
+          # Ruff badge
+          if [ "${{ steps.validate.outputs.ruff_status }}" == "0" ]; then
             pybadges --left "Ruff" --right "passing" --right-color green > ruff.svg
           else
             pybadges --left "Ruff" --right "failing" --right-color red > ruff.svg
           fi
 
-      # Run tests and generate coverage reports
-      - name: Run tests with coverage
-        run: |
-          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term --cov-report=html
-
-      # Generate the coverage badge
-      - name: Generate Coverage Badge
-        run: |
-          pip install coverage-badge
+          # Coverage badge
+          COVERAGE_PCT=$(python -c "print(round(float('${{ steps.validate.outputs.coverage }}') * 100))")
           coverage-badge -o coverage.svg
 
-      # Optionally, upload artifacts (coverage reports and badges)
-      - name: Upload coverage report and badges
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: coverage-and-badges
