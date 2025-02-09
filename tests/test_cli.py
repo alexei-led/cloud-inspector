@@ -44,12 +44,14 @@ def test_discovery_execute_success(monkeypatch):
     result = runner.invoke(
         cli,
         [
+            "--credentials-file", credentials_path,
+            "--cloud-context", "aws-account-1",
+            "--credentials-file", "dummy",  # if needed
+            "--cloud-context", "dummy",
             "discovery", "execute",
             "test request",
             "--service", "s3",
-            "--thread-id", "123",
-            "--credentials-file", credentials_path,
-            "--cloud-context", "aws-account-1"
+            "--thread-id", "123"
         ]
     )
     # Clean up temporary file
