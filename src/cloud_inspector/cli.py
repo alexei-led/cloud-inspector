@@ -45,7 +45,7 @@ def setup_logging(log_level: str) -> None:
 @click.option("--credentials-file", type=click.Path(exists=True, readable=True), help="Path to a JSON or YAML file containing cloud credentials (e.g. AWS keys).")
 @click.option("--cloud-context", type=str, help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription).")
 @click.pass_context
-def cli(ctx: click.Context, log_level: str, project: str) -> None:
+def cli(ctx: click.Context, log_level: str, project: str, credentials_file: str, cloud_context: str) -> None:
     """Cloud Inspector - AWS Code Generation Tool.
 
     Generate and analyze Python code for AWS operations using various LLMs.
@@ -55,6 +55,9 @@ def cli(ctx: click.Context, log_level: str, project: str) -> None:
     # Store common objects in context
     ctx.ensure_object(dict)
     ctx.obj["project"] = project
+    ctx.obj["credentials_file"] = credentials_file
+    ctx.obj["cloud_context"] = cloud_context
+
     model_registry = ModelRegistry()
     ctx.obj["registry"] = model_registry
     code_generator = CodeGeneratorAgent(model_registry)
@@ -120,18 +123,11 @@ class CloudProviderParamType(click.ParamType):
 @click.option("--model", default="gpt-4-turbo")
 @click.option("--thread-id", required=True)
 @click.pass_context
-def execute(
-    ctx: click.Context,
-    request: str,
-    cloud: CloudProvider,
-    service: str,
-    model: str,
-    thread_id: str,
-    credentials_file: str,
-    cloud_context: str,
-):
+def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str, thread_id: str):
     """Execute cloud inspection workflow."""
-    # Initialize an empty credentials dict.
+    # Retrieve the credentials file and cloud_context from global options
+    credentials_file = ctx.obj.get("credentials_file")
+    cloud_context = ctx.obj.get("cloud_context")
     credentials = {}
     if credentials_file:
         with open(credentials_file, "r") as f:
