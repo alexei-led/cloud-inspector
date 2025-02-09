@@ -2,6 +2,7 @@
 
 import json
 import logging
+import yaml
 from datetime import datetime
 
 import click
@@ -126,6 +127,8 @@ def execute(
     service: str,
     model: str,
     thread_id: str,
+    credentials_file: str,
+    cloud_context: str,
 ):
     """Execute cloud inspection workflow."""
     # Initialize an empty credentials dict.
