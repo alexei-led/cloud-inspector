@@ -43,9 +43,16 @@ jobs:
         run: |
           source .venv/bin/activate
           ruff check . --ignore=C901
-          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term
+          pytest tests/ -v --cov=cloud_inspector --cov-report=xml --cov-report=term --junitxml=junit.xml
 
-      - name: Upload coverage to Codecov
+      - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: alexei-led/cloud-inspector
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

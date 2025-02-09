@@ -2,7 +2,7 @@
 
 [![Tests](https://github.com/alexei-led/cloud-inspector/actions/workflows/validate.yml/badge.svg)](https://github.com/alexei-led/cloud-inspector/actions)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![codecov](https://codecov.io/gh/alexei-led/cloud-inspector/branch/main/graph/badge.svg)](https://codecov.io/gh/alexei-led/cloud-inspector)
+[![codecov](https://codecov.io/gh/alexei-led/cloud-inspector/graph/badge.svg?token=HBJ1R4UQ4E)](https://codecov.io/gh/alexei-led/cloud-inspector)
 
 A tool for generating and analyzing AWS code using various LLMs.
 
