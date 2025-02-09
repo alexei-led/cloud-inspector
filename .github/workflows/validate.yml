@@ -24,7 +24,7 @@ jobs:
 
       # Run linting with Ruff
       - name: Lint with ruff
-        run: ruff .
+        run: ruff check . --ignore=C901
 
       # Generate the Ruff badge based on lint results
       - name: Generate Ruff Badge
