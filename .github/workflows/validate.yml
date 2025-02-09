@@ -69,7 +69,11 @@ jobs:
           status = "passing" if "${{ steps.validate.outputs.ruff_status }}" == "0" else "failing"
           color = "green" if status == "passing" else "red"
           with open("ruff.svg", "w") as f:
-              f.write(badge(left="Ruff", right=status, right_color=color))
+              f.write(badge(
+                  label="Ruff",
+                  message=status,
+                  message_color=color
+              ))
           '
 
           # Generate coverage badge
