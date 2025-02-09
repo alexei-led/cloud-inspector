@@ -197,6 +197,10 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
 
 def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Executes code using CodeExecutionAgent."""
+    # If the workflow is already failed or no code has been generated, skip code execution.
+    if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
+        return state
+
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
