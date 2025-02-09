@@ -19,13 +19,36 @@ A tool for generating and analyzing AWS code using various LLMs.
 - AWS service and permission tracking
 - LangSmith integration for tracing and monitoring
 
+## CLI Usage
+
+This project provides a command-line interface to trigger the workflow.
+
+### List Models
+
+```bash
+cloud-inspector model list
+```
+
+### Execute Discovery Workflow
+
+```bash
+cloud-inspector discovery execute "<request>" --service <service_name> --thread-id <thread_id> [--cloud <provider>] [--model <model_name>]
+```
+
+Additional global options include:
+  - `--log-level`: Change logging verbosity.
+  - `--project`: Specify the LangSmith project for tracing.
+  - `--credentials-file`: Path to the JSON/YAML file containing cloud credentials.
+  - `--cloud-context`: Cloud account or project identifier.
+
 ## Workflow Architecture
 
 Cloud Inspector uses a sophisticated multi-agent system orchestrated in an iterative workflow:
 
 ```mermaid
 graph TD
-    Start([Start]) --> UserRequest[User Request]
+    CLI[CLI Entry Point] --> Start([Start])
+    Start --> UserRequest[User Request]
     UserRequest --> Orchestrator{Orchestration Agent}
     
     subgraph IterativeLoop[Iterative Discovery Loop]
@@ -53,6 +76,7 @@ graph TD
     StateUpdate -.->|Update| IterationData
     StateUpdate -.->|Store| CollectedData
     
+    style CLI fill:#FDFD96,stroke:#333,stroke-width:2px
     style Start fill:#90EE90
     style End fill:#FFB6C1
     style IterativeLoop fill:#f0f0f0,stroke:#333,stroke-width:2px
@@ -120,6 +144,19 @@ graph TD
 pip install -e ".[dev]"
 ```
 
+### Local Environment Setup
+
+This project uses [direnv](https://direnv.net/) to automatically load environment variables.
+Ensure you have [direnv](https://direnv.net/) installed. The provided `.envrc` file will:
+  - Set up your virtual environment (using `layout python`)
+  - Automatically load environment variables from a local `.env` file.
+
+To enable, run:
+
+```bash
+direnv allow
+```
+
 ## Configuration
 
 Create a `.env` file based on `.env.example`:
@@ -141,6 +178,17 @@ Required environment variables:
 3. Make your changes
 4. Run tests
 5. Submit a pull request
+
+## Continuous Integration & Validation
+
+This repository uses GitHub Actions to run tests, linting, and code style checks on every push and pull request.
+You can review the workflow configuration in [`.github/workflows/validate.yml`](.github/workflows/validate.yml).
+
+To run tests and validations locally, simply execute:
+
+```bash
+pytest
+```
 
 ## License
 
