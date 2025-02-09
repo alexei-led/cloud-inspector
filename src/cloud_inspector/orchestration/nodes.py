@@ -20,29 +20,33 @@ MAX_ITERATIONS = 3
 
 def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Analyzes new discoveries against all previous findings to determine uniqueness."""
-    if not state["discoveries"] or state.get("status") != WorkflowStatus.IN_PROGRESS:
-        return state
+    try:
+        if not state["discoveries"] or state.get("status") != WorkflowStatus.IN_PROGRESS:
+            return state
 
-    current_discovery = state["discoveries"][-1]
+        current_discovery = state["discoveries"][-1]
 
-    # Skip analysis if this is the first discovery
-    if len(state["discoveries"]) == 1:
-        return state
+        # Skip analysis if this is the first discovery
+        if len(state["discoveries"]) == 1:
+            return state
 
-    # Compare current discovery with all previous discoveries
-    previous_discoveries = state["discoveries"][:-1]
-    is_redundant = _is_discovery_redundant(current_discovery, previous_discoveries, agents)
+        # Compare current discovery with all previous discoveries
+        previous_discoveries = state["discoveries"][:-1]
+        is_redundant = _is_discovery_redundant(current_discovery, previous_discoveries, agents)
 
-    if is_redundant:
-        state["status"] = WorkflowStatus.COMPLETED
-        state["reason"] = "no_new_information_found"
-        # Remove the redundant discovery
-        state["discoveries"].pop()
-        # Copy last successful discovery output to outputs
-        if state["discoveries"]:
-            state["outputs"].update(state["discoveries"][-1]["output"])
+        if is_redundant:
+            state["status"] = WorkflowStatus.COMPLETED
+            state["reason"] = "no_new_information_found"
+            # Remove the redundant discovery
+            state["discoveries"].pop()
+            # Copy last successful discovery output to outputs
+            if state["discoveries"]:
+                state["outputs"].update(state["discoveries"][-1]["output"])
 
-    state["updated_at"] = datetime.now()
+        state["updated_at"] = datetime.now()
+    except Exception as e:
+        state["status"] = WorkflowStatus.FAILED
+        state["outputs"]["error"] = str(e)
     return state
 
 
@@ -143,41 +147,51 @@ def orchestration_node(state: OrchestrationState, agents: dict[str, Any]) -> Orc
 
 def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Generates prompts using PromptGeneratorAgent."""
-    prompt_generator: PromptGeneratorAgent = agents["prompt_generator"]
+    try:
+        prompt_generator: PromptGeneratorAgent = agents["prompt_generator"]
 
-    # Convert variables to list format expected by prompt generator
-    var_list = [{"name": k, "value": v} for k, v in state["params"].items()]
+        # Convert variables to list format expected by prompt generator
+        var_list = [{"name": k, "value": v} for k, v in state["params"].items()]
 
-    # Generate prompt based on current state
-    prompt = prompt_generator.generate_prompt(
-        model_name=agents["model_name"],
-        cloud=cast(CloudProvider, state["cloud"]),
-        service=state["service"],
-        operation="inspect",
-        request=state["request"],
-        variables=var_list,
-        previous_results=state["discoveries"][-1] if state["discoveries"] else None,
-        iteration=state["iteration"],
-    )
+        # Generate prompt based on current state
+        prompt = prompt_generator.generate_prompt(
+            model_name=agents["model_name"],
+            cloud=cast(CloudProvider, state["cloud"]),
+            service=state["service"],
+            operation="inspect",
+            request=state["request"],
+            variables=var_list,
+            previous_results=state["discoveries"][-1] if state["discoveries"] else None,
+            iteration=state["iteration"],
+        )
 
-    # Update variables from prompt
-    if isinstance(prompt, CodeGenerationPrompt) and prompt.variables:
-        state["params"].update({var["name"]: var["value"] for var in prompt.variables if var["name"] not in state["params"]})
+        # Update variables from prompt
+        if isinstance(prompt, CodeGenerationPrompt) and prompt.variables:
+            state["params"].update({var["name"]: var["value"] for var in prompt.variables if var["name"] not in state["params"]})
 
-    state["outputs"]["prompt"] = prompt
-    state["updated_at"] = datetime.now()
+        state["outputs"]["prompt"] = prompt
+        state["updated_at"] = datetime.now()
+    except Exception as e:
+        state["status"] = WorkflowStatus.FAILED
+        state["outputs"]["error"] = str(e)
+        return state
     return state
 
 
 def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Generates code using CodeGeneratorAgent."""
-    code_generator: CodeGeneratorAgent = agents["code_generator"]
-    prompt = state["outputs"]["prompt"]
+    try:
+        code_generator: CodeGeneratorAgent = agents["code_generator"]
+        prompt = state["outputs"]["prompt"]
 
-    result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
+        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
 
-    state["outputs"]["code"] = result
-    state["updated_at"] = datetime.now()
+        state["outputs"]["code"] = result
+        state["updated_at"] = datetime.now()
+    except Exception as e:
+        state["status"] = WorkflowStatus.FAILED
+        state["outputs"]["error"] = str(e)
+        return state
     return state
 
 
