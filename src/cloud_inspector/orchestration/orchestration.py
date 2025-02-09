@@ -68,7 +68,7 @@ class OrchestrationAgent:
     def execute(self, request: str, cloud: CloudProvider, service: str, thread_id: str, params: Optional[dict] = None) -> dict:
         """Execute the orchestration workflow."""
         workflow = self._create_workflow()
-        compiled_workflow = workflow.compile(checkpointer=self.checkpointer)
+        compiled_workflow = workflow.compile()
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
         config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
