@@ -2,10 +2,10 @@
 
 import json
 import logging
-import yaml
 from datetime import datetime
 
 import click
+import yaml
 
 from cloud_inspector.code_generator import CodeGeneratorAgent
 from cloud_inspector.components.models import ModelRegistry
@@ -130,7 +130,7 @@ def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str
     cloud_context = ctx.obj.get("cloud_context")
     credentials = {}
     if credentials_file:
-        with open(credentials_file, "r") as f:
+        with open(credentials_file) as f:
             content = f.read()
             try:
                 credentials = json.loads(content)
