@@ -8,13 +8,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
+      # Cache the virtual environment
+      - name: Cache virtual environment
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            ~/.cache/pip
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('**/pyproject.toml', '**/setup.cfg', '**/requirements*.txt') }}
+          restore-keys: |
+            venv-${{ runner.os }}-py3.12-
+
       - name: Install dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install --upgrade pip
           pip install .[dev]
 
@@ -22,6 +37,7 @@ jobs:
       - name: Run validation
         id: validate
         run: |
+          source .venv/bin/activate
           # Run linting and capture exit code
           ruff check . --ignore=C901
           RUFF_EXIT=$?
@@ -44,17 +60,19 @@ jobs:
       # Generate badges based on results
       - name: Generate Badges
         run: |
-          pip install pybadges
+          source .venv/bin/activate
+          pip install pybadges coverage-badge
 
-          # Ruff badge
-          if [ "${{ steps.validate.outputs.ruff_status }}" == "0" ]; then
-            pybadges --left "Ruff" --right "passing" --right-color green > ruff.svg
-          else
-            pybadges --left "Ruff" --right "failing" --right-color red > ruff.svg
-          fi
+          # Generate Ruff badge using Python
+          python -c '
+          from pybadges import badge
+          status = "passing" if "${{ steps.validate.outputs.ruff_status }}" == "0" else "failing"
+          color = "green" if status == "passing" else "red"
+          with open("ruff.svg", "w") as f:
+              f.write(badge(left="Ruff", right=status, right_color=color))
+          '
 
-          # Coverage badge
-          COVERAGE_PCT=$(python -c "print(round(float('${{ steps.validate.outputs.coverage }}') * 100))")
+          # Generate coverage badge
           coverage-badge -o coverage.svg
 
       - name: Upload artifacts
