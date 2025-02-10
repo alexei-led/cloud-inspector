@@ -54,8 +54,6 @@ def test_discovery_execute_success(monkeypatch):
             "test request",
             "--service",
             "s3",
-            "--thread-id",
-            "123",
         ],
     )
     # Clean up temporary file
