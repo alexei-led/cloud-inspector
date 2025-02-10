@@ -25,7 +25,7 @@ def test_model_list_cli(monkeypatch):
     assert "modelB" in result.output
 
 
-def fake_execute_success(self, request, cloud, service, thread_id, params=None):
+def fake_execute_success(self, request, cloud, service, params=None):
     # Return a fake result as a dictionary.
     return {"fake": "result"}
 
@@ -64,7 +64,7 @@ def test_discovery_execute_success(monkeypatch):
     assert '"fake": "result"' in result.output
 
 
-def fake_execute_failure(self, request, cloud, service, thread_id, params=None):
+def fake_execute_failure(self, request, cloud, service, params=None):
     raise ValueError("Test error")
 
 
