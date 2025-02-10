@@ -66,8 +66,15 @@ class OrchestrationAgent:
 
     def execute(self, request: str, cloud: CloudProvider, service: str, params: Optional[dict] = None) -> dict:
         """Execute the orchestration workflow."""
+        aws_credentials = None
+        if params and "credentials" in params:
+            aws_credentials = params.pop("credentials")
+
         workflow = self._create_workflow()
         compiled_workflow = workflow.compile()
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
+
+        initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
+        initial_state["aws_credentials"] = aws_credentials
 
         return compiled_workflow.invoke(initial_state)

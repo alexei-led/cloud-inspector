@@ -76,7 +76,15 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
+    extra_params = {"credentials": {"key": "value", "number": 123}}
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", params=extra_params)
+
+    expected_credentials = {"key": "value", "number": 123}
+    mock_code_executor.execute_generated_code.assert_called_with(
+        ANY,  # generated_files (or use a matching helper)
+        aws_credentials=expected_credentials,
+        execution_id=ANY,
+    )
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["reason"] == "no_new_information_found"
