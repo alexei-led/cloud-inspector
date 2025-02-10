@@ -82,7 +82,7 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
     expected_credentials = {"key": "value", "number": 123}
     mock_code_executor.execute_generated_code.assert_called_with(
         ANY,  # generated_files (or use a matching helper)
-        aws_credentials=expected_credentials,
+        credentials=expected_credentials,
         execution_id=ANY,
     )
 
