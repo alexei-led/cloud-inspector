@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import docker
-from docker.errors import DockerException
+from docker.errors import DockerException, ImageNotFound
 from docker.models.containers import Container
 
 from cloud_inspector.constants import DEFAULT_CPU_LIMIT, DEFAULT_DOCKER_IMAGE, DEFAULT_MEMORY_LIMIT, DEFAULT_TIMEOUT
@@ -42,11 +42,12 @@ class DockerSandbox:
 
     def _ensure_image(self):
         """Ensure Docker image is available."""
+        if self.docker is None:
+            raise DockerException("Docker client is not initialized.")
         try:
             try:
-                if self.docker:
-                    self.docker.images.get(self.image)
-            except docker.errors.ImageNotFound:
+                self.docker.images.get(self.image)
+            except ImageNotFound:
                 self.docker.images.pull(self.image)
                 self.docker.images.get(self.image)
         except DockerException as e:
