@@ -65,6 +65,7 @@ generated_prompts/*
 logs/
 
 # Security
+.credentials.json
 *.pem
 *.key
 *.crt
