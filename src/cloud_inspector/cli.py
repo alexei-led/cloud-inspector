@@ -121,9 +121,8 @@ class CloudProviderParamType(click.ParamType):
 @click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS)
 @click.option("--service", required=True)
 @click.option("--model", default="gpt-4-turbo")
-@click.option("--thread-id", required=True)
 @click.pass_context
-def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str, thread_id: str):
+def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str):
     """Execute cloud inspection workflow."""
     # Retrieve the credentials file and cloud_context from global options
     credentials_file = ctx.obj.get("credentials_file")
@@ -151,7 +150,6 @@ def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str
             request=request,
             cloud=cloud,
             service=service,
-            thread_id=thread_id,
             params=extra_params if extra_params else None,
         )
 

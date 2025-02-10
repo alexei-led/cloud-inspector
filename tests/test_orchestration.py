@@ -76,7 +76,7 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["reason"] == "no_new_information_found"
@@ -100,7 +100,7 @@ def test_workflow_with_empty_results(mock_prompt_generator, mock_code_generator,
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert len(result["discoveries"]) > 0
@@ -131,7 +131,7 @@ def test_workflow_with_multiple_cloud_providers(mock_prompt_generator, mock_code
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
     for provider in [CloudProvider.AWS, CloudProvider.AZURE, CloudProvider.GCP]:
-        result = agent.execute(request="List compute instances", cloud=provider, service="compute", thread_id=f"test-{provider}")
+        result = agent.execute(request="List compute instances", cloud=provider, service="compute")
 
         assert result["status"] == WorkflowStatus.COMPLETED
         assert result["outputs"]["provider"].lower() == provider.value.lower()
@@ -151,7 +151,7 @@ def test_workflow_with_invalid_service(mock_prompt_generator, mock_code_generato
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="List resources", cloud=CloudProvider.AWS, service="unknown_service", thread_id="test-123")
+    result = agent.execute(request="List resources", cloud=CloudProvider.AWS, service="unknown_service")
 
     assert result["status"] == WorkflowStatus.FAILED
     assert "Invalid service" in result["outputs"]["error"]
@@ -169,7 +169,7 @@ def test_execution_failure_after_max_retries(mock_prompt_generator, mock_code_ge
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.FAILED
     assert result["retry_attempts"] == 2  # Max retries reached
@@ -194,7 +194,7 @@ def test_max_iterations_limit(mock_prompt_generator, mock_code_generator, mock_c
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["reason"] == "max_iterations_reached"
@@ -210,7 +210,7 @@ def test_workflow_with_region_param(mock_prompt_generator, mock_code_generator, 
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123", params={"region": "us-west-2"})
+    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2", params={"region": "us-west-2"})
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["outputs"]["instances"][0]["region"] == "us-west-2"
@@ -222,7 +222,7 @@ def test_workflow_error_handling(mock_prompt_generator, mock_code_generator, moc
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123", params={"region": "invalid-region"})
+    result = agent.execute(request="List EC2 instances", cloud=CloudProvider.AWS, service="ec2", params={"region": "invalid-region"})
 
     assert result["status"] == WorkflowStatus.FAILED
     assert result["outputs"]["error"] == "InvalidParameterError"
@@ -243,7 +243,7 @@ def test_workflow_with_partial_success(mock_prompt_generator, mock_code_generato
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request with retries", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request with retries", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert len(result["discoveries"]) > 0
@@ -259,7 +259,7 @@ def test_workflow_with_model_failure(mock_prompt_generator, mock_code_generator,
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.FAILED
     assert "Model API error" in result["outputs"]["error"]
@@ -276,7 +276,7 @@ def test_workflow_with_checkpointing(mock_prompt_generator, mock_code_generator,
         model_registry=mock_model_registry,
         checkpointer=stub_checkpointer,  # Use our stub
     )
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
     assert result["status"] == WorkflowStatus.COMPLETED
 
 
@@ -286,7 +286,7 @@ def test_workflow_with_prompt_failure(mock_prompt_generator, mock_code_generator
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.FAILED
     assert "Failed to generate prompt" in result["outputs"]["error"]
@@ -314,7 +314,7 @@ def test_workflow_completion_metrics(mock_prompt_generator, mock_code_generator,
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test metrics", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test metrics", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["execution_metrics"]["total_execution_time"] > 0
@@ -332,7 +332,7 @@ def test_workflow_empty_state(mock_prompt_generator, mock_code_generator, mock_c
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test empty state", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test empty state", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["outputs"]["status"] == "empty"
