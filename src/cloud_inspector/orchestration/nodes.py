@@ -215,7 +215,7 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 src/cloud_inspector/orchestration/nodes.py
 ````python
 <<<<<<< SEARCH
-            aws_credentials=aws_credentials,
+            credentials=credentials,
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
