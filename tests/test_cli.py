@@ -73,7 +73,7 @@ def test_discovery_execute_failure(monkeypatch):
     monkeypatch.setattr(OrchestrationAgent, "execute", fake_execute_failure)
 
     runner = CliRunner()
-    result = runner.invoke(cli, ["discovery", "execute", "test request", "--service", "s3", "--thread-id", "123"])
+    result = runner.invoke(cli, ["discovery", "execute", "test request", "--service", "s3"])
     # Exit code should be nonzero and error message included.
     assert result.exit_code != 0
     assert "Test error" in result.output
