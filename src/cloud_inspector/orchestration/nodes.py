@@ -213,7 +213,6 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     credentials = state.get("credentials")
 
 src/cloud_inspector/orchestration/nodes.py
-````python
 <<<<<<< SEARCH
             credentials=credentials,
     code_executor: CodeExecutionAgent = agents["code_executor"]
@@ -225,7 +224,7 @@ src/cloud_inspector/orchestration/nodes.py
 
         execution_result = code_executor.execute_generated_code(
             generated_files=generated_files,
-            aws_credentials=aws_credentials,
+            credentials=credentials,
             execution_id=f"exec_{state['iteration']}"
         )
 
