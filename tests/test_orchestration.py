@@ -298,7 +298,7 @@ def test_workflow_with_code_generation_failure(mock_prompt_generator, mock_code_
 
     agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
-    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", thread_id="test-123")
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     assert result["status"] == WorkflowStatus.FAILED
     assert "Failed to generate code" in result["outputs"]["error"]
