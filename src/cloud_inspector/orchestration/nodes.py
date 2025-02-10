@@ -213,8 +213,6 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     credentials = state.get("credentials")
 
 src/cloud_inspector/orchestration/nodes.py
-<<<<<<< SEARCH
-            credentials=credentials,
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
