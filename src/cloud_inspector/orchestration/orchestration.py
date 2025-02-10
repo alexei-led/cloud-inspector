@@ -72,7 +72,6 @@ class OrchestrationAgent:
 
         workflow = self._create_workflow()
         compiled_workflow = workflow.compile()
-        initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
 
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
         initial_state["aws_credentials"] = aws_credentials
