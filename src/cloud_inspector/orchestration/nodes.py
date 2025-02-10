@@ -210,7 +210,7 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
         return state
 
-    aws_credentials = state.get("aws_credentials")
+    aws_credentials = state.get("aws_credentials") or agents.get("aws_credentials")
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
