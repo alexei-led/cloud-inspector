@@ -211,7 +211,6 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
         return state
 
     credentials = state.get("credentials")
-````
 
 src/cloud_inspector/orchestration/nodes.py
 ````python
