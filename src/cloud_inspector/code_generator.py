@@ -53,7 +53,7 @@ class CodeGeneratorResult:
         if not all(key in self.generated_files for key in required_keys):
             missing = required_keys - set(self.generated_files.keys())
             raise ValueError(f"Generated files missing required keys: {missing}")
-        
+
         # Set default timestamp if not provided
         if self.generated_at is None:
             self.generated_at = datetime.now()
