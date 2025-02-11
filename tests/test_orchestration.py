@@ -5,9 +5,7 @@ from unittest.mock import Mock
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from cloud_inspector.code_generator import ParseError
-
-from cloud_inspector.code_generator import CodeGeneratorAgent
+from cloud_inspector.code_generator import CodeGeneratorAgent, ParseError
 from cloud_inspector.components.types import CloudProvider, WorkflowStatus
 from cloud_inspector.execution_agent import CodeExecutionAgent
 from cloud_inspector.orchestration.orchestration import OrchestrationAgent
@@ -34,22 +32,25 @@ def mock_prompt_generator():
 def mock_code_generator():
     """Mock code generator that returns test code files."""
     generator = Mock(spec=CodeGeneratorAgent)
-    generator.generate_code.return_value = ({
-        "model_name": "test-model",
-        "iteration_id": "test-1",
-        "run_id": "run-1",
-        "generated_files": {
-            "main.py": '''
+    generator.generate_code.return_value = (
+        {
+            "model_name": "test-model",
+            "iteration_id": "test-1",
+            "run_id": "run-1",
+            "generated_files": {
+                "main.py": """
             {
                 "main_py": "print('test')",
                 "requirements_txt": "boto3==1.26.0",
                 "policy_json": "{}"
             }
-            ''',
-            "requirements.txt": "boto3==1.26.0",
-            "policy.json": "{}"
-        }
-    }, Mock())
+            """,
+                "requirements.txt": "boto3==1.26.0",
+                "policy.json": "{}",
+            },
+        },
+        Mock(),
+    )
     return generator
 
 
@@ -304,35 +305,26 @@ def test_workflow_json_format_validation(mock_prompt_generator, mock_code_genera
     # Configure model to return non-JSON response
     mock_model = mock_model_registry.get_model.return_value
     mock_model.invoke.return_value = Mock(content="Invalid non-JSON response")
-    
+
     # Configure code generator to raise ParseError for invalid JSON
     mock_code_generator.generate_code.side_effect = ParseError("Invalid JSON response from model")
-    
-    agent = OrchestrationAgent(
-        model_name="test-model",
-        prompt_generator=mock_prompt_generator,
-        code_generator=mock_code_generator,
-        code_executor=mock_code_executor,
-        model_registry=mock_model_registry
-    )
+
+    agent = OrchestrationAgent(model_name="test-model", prompt_generator=mock_prompt_generator, code_generator=mock_code_generator, code_executor=mock_code_executor, model_registry=mock_model_registry)
 
     # Execute workflow
-    result = agent.execute(
-        request="Test request",
-        cloud=CloudProvider.AWS,
-        service="ec2"
-    )
+    result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2")
 
     # Verify the failure was properly handled
     assert result["status"] == WorkflowStatus.FAILED
     assert "Invalid JSON" in result["outputs"]["error"]
     assert result["error_count"] > 0
-    
+
     # Verify code generator was called with correct parameters
     mock_code_generator.generate_code.assert_called_once()
-    
+
     # Verify code executor was not called (should stop at code generation)
     mock_code_executor.execute_generated_code.assert_not_called()
+
 
 def test_workflow_with_checkpointing(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow with checkpointing enabled."""

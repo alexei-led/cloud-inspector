@@ -15,7 +15,6 @@ from unittest.mock import Mock
 import autopep8
 from autoflake import fix_code
 from black import FileMode, format_str
-from langchain_core.messages.base import BaseMessage
 from langchain_core.prompts.chat import ChatPromptTemplate
 from pydantic import BaseModel
 from pyflakes.api import check
@@ -90,19 +89,21 @@ class CodeGeneratorAgent:
 
         return chat_prompt.format_messages(**variables)
 
-    def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock]) -> dict[str, str]:
+    def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock, None]) -> dict[str, str]:
         """Extract latest GeneratedFiles content from model response."""
         try:
+            if raw_response is None:
+                raise ParseError("Response cannot be None")
             # Handle Mock objects with content attribute
-            if isinstance(raw_response, Mock) and hasattr(raw_response, 'content'):
+            if isinstance(raw_response, Mock) and hasattr(raw_response, "content"):
                 raw_response = raw_response.content
-                
+
             # Parse response if string
             if isinstance(raw_response, str):
                 try:
                     messages = json.loads(raw_response)
-                except json.JSONDecodeError:
-                    raise ParseError("Invalid JSON response")
+                except json.JSONDecodeError as e:
+                    raise ParseError("Invalid JSON response") from e
             else:
                 messages = raw_response
 
@@ -112,7 +113,7 @@ class CodeGeneratorAgent:
 
             # Track latest content
             latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
-            
+
             # Handle list of messages format
             if isinstance(messages, list):
                 for msg in messages:
@@ -128,7 +129,7 @@ class CodeGeneratorAgent:
         except Exception as e:
             if isinstance(e, ParseError):
                 raise
-            raise ParseError(f"Failed to extract files: {str(e)}")
+            raise ParseError(f"Failed to extract files: {str(e)}") from e
 
     def _validate_model(self, model_name: str) -> None:
         """Validate model capabilities for code generation."""
@@ -138,7 +139,7 @@ class CodeGeneratorAgent:
     def _prepare_messages(self, prompt: CodeGenerationPrompt, variables: dict[str, Any], previous_results: Optional[dict[str, Any]] = None, feedback: Optional[dict[str, Any]] = None) -> list[Any]:
         """Prepare messages for the model including context and feedback."""
         # Add JSON format requirement to the system message
-        system_message = f"""You are an expert {prompt.cloud.value} DevOps engineer. 
+        system_message = f"""You are an expert {prompt.cloud.value} DevOps engineer.
 You must provide your response as a JSON object that follows this exact structure:
 {{
     "main_py": "string containing Python code",
@@ -147,7 +148,7 @@ You must provide your response as a JSON object that follows this exact structur
 }}"""
 
         messages = [{"role": "system", "content": system_message}]
-        
+
         # Add the main prompt with JSON format requirement
         user_prompt = f"{prompt.template}\n\nYou must respond with a valid JSON object containing the generated files. Format your entire response as a JSON object."
         messages.append({"role": "user", "content": user_prompt})
@@ -180,7 +181,7 @@ You must provide your response as a JSON object that follows this exact structur
 
             raw_response = response.get("raw")
             latest_files = self._extract_latest_generated_files(raw_response)
-            
+
             return {
                 "main.py": self._reformat_code(latest_files["main_py"], code=True),
                 "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
@@ -189,7 +190,7 @@ You must provide your response as a JSON object that follows this exact structur
         except Exception as e:
             if isinstance(e, ParseError):
                 raise
-            raise ParseError(f"Failed to process response: {str(e)}")
+            raise ParseError(f"Failed to process response: {str(e)}") from e
 
     def generate_code(
         self,

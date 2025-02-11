@@ -189,12 +189,7 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
 
-        result = code_generator.generate_code(
-            prompt=prompt, 
-            model_name=agents["model_name"], 
-            variables=state["params"], 
-            iteration_id=f"iter_{state['iteration']}"
-        )
+        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
 
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
