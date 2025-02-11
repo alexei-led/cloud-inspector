@@ -232,7 +232,7 @@ You must provide your response as a JSON object that follows this exact structur
         iteration_id: str,
         previous_results: Optional[dict[str, Any]] = None,
         feedback: Optional[dict[str, Any]] = None,
-    ) -> tuple[CodeGeneratorResult, Path]:
+    ) -> CodeGeneratorResult:
         """Execute the code generation workflow."""
         try:
             from langchain_core.tracers.context import collect_runs

@@ -134,7 +134,7 @@ def test_generate_code_structured_output_parsing(generator, test_prompt):
     mock_ctx_manager.__exit__.return_value = None
 
     with patch("langchain_core.tracers.context.collect_runs", return_value=mock_ctx_manager):
-        result, output_dir = generator.generate_code(prompt=test_prompt, model_name="test-model", variables=variables, iteration_id="test-1")
+        result = generator.generate_code(prompt=test_prompt, model_name="test-model", variables=variables, iteration_id="test-1")
 
         # Verify model validation was called
         generator.model_registry.validate_model_capability.assert_called_once_with("test-model", ModelCapability.CODE_GENERATION)
@@ -152,16 +152,17 @@ def test_generate_code_structured_output_parsing(generator, test_prompt):
         assert isinstance(result.generated_at, datetime)
 
         # Verify files were processed and formatted
-        assert "handler" in result.generated_files["main.py"]
-        assert "aws-lambda-powertools" in result.generated_files["requirements.txt"]
-        assert "2012-10-17" in result.generated_files["policy.json"]
+        assert "handler" in result.generated_files["main_py"]
+        assert "aws-lambda-powertools" in result.generated_files["requirements_txt"]
+        assert "2012-10-17" in result.generated_files["policy_json"]
 
-        # Verify output directory was created
-        assert output_dir.exists()
-        assert (output_dir / "main.py").exists()
-        assert (output_dir / "requirements.txt").exists()
-        assert (output_dir / "policy.json").exists()
-        assert (output_dir / "metadata.json").exists()
+        # Verify output directory was set and exists
+        assert result.output_path is not None
+        assert result.output_path.exists()
+        assert (result.output_path / "main.py").exists()
+        assert (result.output_path / "requirements.txt").exists()
+        assert (result.output_path / "policy.json").exists()
+        assert (result.output_path / "metadata.json").exists()
 
 
 # Test code formatting and validation
