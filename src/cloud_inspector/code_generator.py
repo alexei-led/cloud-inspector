@@ -326,7 +326,7 @@ You must provide your response as a JSON object that follows this exact structur
                     with open(file_path, "w") as f:
                         f.write(content)
                         f.flush()
-                except (OSError, IOError) as e:
+                except OSError as e:
                     logger.error(f"Error saving {filename}: {e}")
                     raise RuntimeError(f"Failed to save generated file {filename}: {e}") from e
 
