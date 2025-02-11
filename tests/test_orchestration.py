@@ -299,10 +299,13 @@ def test_workflow_with_model_failure(mock_prompt_generator, mock_code_generator,
 
 def test_workflow_json_format_validation(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow handles JSON format validation properly."""
-    # Configure model to return non-JSON response
+    # Configure model to return non-JSON response that will fail parsing
     mock_model = mock_model_registry.get_model.return_value
     mock_model.invoke.return_value = Mock(content="Invalid non-JSON response")
-
+    
+    # Configure code generator to raise ParseError for invalid JSON
+    mock_code_generator.generate_code.side_effect = ParseError("Invalid JSON response from model")
+    
     agent = OrchestrationAgent(
         model_name="test-model",
         prompt_generator=mock_prompt_generator,
@@ -318,7 +321,8 @@ def test_workflow_json_format_validation(mock_prompt_generator, mock_code_genera
     )
 
     assert result["status"] == WorkflowStatus.FAILED
-    assert "JSON" in result["outputs"]["error"]
+    assert "Invalid JSON" in result["outputs"]["error"]
+    assert result["error_count"] > 0
 
 def test_workflow_with_checkpointing(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow with checkpointing enabled."""
