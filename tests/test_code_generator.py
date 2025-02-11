@@ -8,7 +8,7 @@ from black.parsing import InvalidInput
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
-from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult
+from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult, ParseError
 from cloud_inspector.components.models import ModelCapability, ModelRegistry
 from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt, GeneratedFiles
 
