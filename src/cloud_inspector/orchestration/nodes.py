@@ -195,22 +195,22 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
     try:
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
-        
+
         logger.debug("Generating code for prompt in iteration %d", state["iteration"])
-        
+
         result: CodeGeneratorResult = code_generator.generate_code(
             prompt=prompt,
             model_name=agents["model_name"],
             variables=state["params"],
             iteration_id=f"iter_{state['iteration']}"
         )
-        
+
         # Store the CodeGeneratorResult directly
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
-        
+
         logger.debug("Code generation successful for iteration %d", state["iteration"])
-        
+
     except ParseError as e:
         logger.error("JSON parsing error in code generation: %s", str(e))
         state["status"] = WorkflowStatus.FAILED
@@ -223,7 +223,7 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
         state["outputs"]["error"] = str(e)
         state["error_count"] += 1
         return state
-    
+
     return state
 
 
@@ -242,15 +242,15 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 
     credentials = state.get("credentials")
     code_executor: CodeExecutionAgent = agents["code_executor"]
-    
+
     try:
         # Explicitly verify we have a CodeGeneratorResult
         code_result = state["outputs"]["code"]
         if not isinstance(code_result, CodeGeneratorResult):
             raise TypeError(f"Expected CodeGeneratorResult, got {type(code_result)}")
-            
+
         logger.debug("Executing generated code for iteration %d", state["iteration"])
-        
+
         execution_result: ExecutionResult = code_executor.execute_generated_code(
             generated_files=code_result.generated_files,
             credentials=credentials,
@@ -280,7 +280,7 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 
         # Update execution metrics
         state["execution_metrics"]["resource_usage"].update(execution_result.resource_usage)
-        
+
     except TypeError as e:
         logger.error("Type error in code execution: %s", str(e))
         state["status"] = WorkflowStatus.FAILED
