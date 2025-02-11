@@ -107,27 +107,27 @@ class CodeGeneratorAgent:
                 return json.loads(raw_response)
             except json.JSONDecodeError as e:
                 raise ParseError("Invalid JSON response") from e
-        
+
         return raw_response
 
     def _extract_files_from_messages(self, messages: Union[dict, list]) -> dict[str, str]:
         """Extract files content from parsed messages."""
-        REQUIRED_KEYS = {"main_py", "requirements_txt", "policy_json"}
-        DEFAULT_FILES = {key: "" for key in REQUIRED_KEYS}
+        required_keys = {"main_py", "requirements_txt", "policy_json"}
+        default_files = {key: "" for key in required_keys}
 
         # Handle direct dictionary format
         if isinstance(messages, dict):
-            if all(key in messages for key in REQUIRED_KEYS):
+            if all(key in messages for key in required_keys):
                 return messages
             raise ParseError("Response missing required file keys")
 
         # Handle list of messages format
         if isinstance(messages, list):
-            latest_files = DEFAULT_FILES.copy()
+            latest_files = default_files.copy()
             for msg in messages:
                 if self._is_valid_generated_files_message(msg):
                     self._update_latest_files(latest_files, msg.get("input", {}))
-            
+
             if any(latest_files.values()):
                 return latest_files
 
