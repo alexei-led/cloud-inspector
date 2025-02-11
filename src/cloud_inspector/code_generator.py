@@ -114,7 +114,15 @@ class CodeGeneratorAgent:
 
     def _prepare_messages(self, prompt: CodeGenerationPrompt, variables: dict[str, Any], previous_results: Optional[dict[str, Any]] = None, feedback: Optional[dict[str, Any]] = None) -> list[Any]:
         """Prepare messages for the model including context and feedback."""
-        messages = self.format_prompt(prompt, variables, supports_system_prompt=True)
+        # Add JSON format requirement to the system message
+        system_message = f"""You are an expert {prompt.cloud.value} DevOps engineer. 
+Provide your response in JSON format following the GeneratedFiles schema with main_py, requirements_txt, and policy_json fields."""
+
+        messages = [{"role": "system", "content": system_message}]
+        
+        # Add the main prompt with JSON format requirement
+        user_prompt = f"{prompt.template}\n\nRespond with a JSON object containing the generated files."
+        messages.append({"role": "user", "content": user_prompt})
 
         if previous_results:
             context = "Previous execution results:\n" + json.dumps(previous_results, indent=2)
