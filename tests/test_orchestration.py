@@ -1,6 +1,6 @@
 """Test cases for the orchestration workflow."""
 
-from unittest.mock import Mock, ANY
+from unittest.mock import Mock
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
@@ -83,14 +83,14 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
     call_args = mock_code_executor.execute_generated_code.call_args
     assert call_args is not None
     args, kwargs = call_args
-    
+
     # Check that generated_files exists and has the expected structure
     assert "generated_files" in kwargs
     assert isinstance(kwargs["generated_files"], dict)
-    
+
     # Check the credentials parameter
     assert kwargs["credentials"] == {"key": "value", "number": 123}
-    
+
     # Check that execution_id exists and is a string
     assert "execution_id" in kwargs
     assert isinstance(kwargs["execution_id"], str)
