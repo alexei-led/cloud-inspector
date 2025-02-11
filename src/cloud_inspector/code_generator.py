@@ -9,6 +9,7 @@ from datetime import datetime
 from io import StringIO
 from pathlib import Path
 from typing import Any, Optional, Union
+from unittest.mock import Mock
 
 # Third-party imports
 import autopep8
