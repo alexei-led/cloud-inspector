@@ -16,11 +16,11 @@ from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt
 @pytest.fixture
 def valid_code_result():
     return CodeGeneratorResult(
-        generated_files={
-            "main_py": "print('test')",
-            "requirements_txt": "boto3==1.26.0",
-            "policy_json": "{}"
-        },
+        generated_files=GeneratedFiles(
+            main_py="print('test')",
+            requirements_txt="boto3==1.26.0",
+            policy_json="{}"
+        ),
         output_path=Path("/tmp/test")
     )
 
@@ -202,11 +202,11 @@ def test_reformat_code_black_error(mock_black, generator):
 def test_save_result_file_error(generator, tmp_path):
     """Test handling of file write errors"""
     result = CodeGeneratorResult(
-        generated_files={
-            "main_py": "def test(): pass",
-            "requirements_txt": "requests",
-            "policy_json": "{}"
-        },
+        generated_files=GeneratedFiles(
+            main_py="def test(): pass",
+            requirements_txt="requests",
+            policy_json="{}"
+        ),
         model_name="test-model",
         generated_at=datetime.now(),
         iteration_id="test-1"
@@ -446,22 +446,22 @@ def test_code_generator_result_validation():
     """Test CodeGeneratorResult validation of required keys."""
     # Test valid case
     valid_result = CodeGeneratorResult(
-        generated_files={
-            "main_py": "print('test')",
-            "requirements_txt": "boto3==1.26.0",
-            "policy_json": "{}"
-        }
+        generated_files=GeneratedFiles(
+            main_py="print('test')",
+            requirements_txt="boto3==1.26.0",
+            policy_json="{}"
+        )
     )
     assert valid_result is not None
 
     # Test missing required key
     with pytest.raises(ValueError) as exc:
         CodeGeneratorResult(
-            generated_files={
-                "main_py": "print('test')",
-                "requirements_txt": "boto3==1.26.0"
-                # missing policy_json
-            }
+            generated_files=GeneratedFiles(
+                main_py="print('test')",
+                requirements_txt="boto3==1.26.0",
+                policy_json=""  # empty but valid
+            )
         )
     assert "missing required keys" in str(exc.value).lower()
 
@@ -470,21 +470,21 @@ def test_code_generator_result_optional_output_path():
     """Test CodeGeneratorResult with and without output_path."""
     # Without output path
     result1 = CodeGeneratorResult(
-        generated_files={
-            "main_py": "print('test')",
-            "requirements_txt": "boto3==1.26.0",
-            "policy_json": "{}"
-        }
+        generated_files=GeneratedFiles(
+            main_py="print('test')",
+            requirements_txt="boto3==1.26.0",
+            policy_json="{}"
+        )
     )
     assert result1.output_path is None
 
     # With output path
     result2 = CodeGeneratorResult(
-        generated_files={
-            "main_py": "print('test')",
-            "requirements_txt": "boto3==1.26.0",
-            "policy_json": "{}"
-        },
+        generated_files=GeneratedFiles(
+            main_py="print('test')",
+            requirements_txt="boto3==1.26.0",
+            policy_json="{}"
+        ),
         output_path=Path("/tmp/test")
     )
     assert result2.output_path == Path("/tmp/test")
