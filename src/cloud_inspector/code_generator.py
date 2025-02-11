@@ -29,14 +29,25 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CodeGeneratorResult:
-    """Result of a code generation."""
+    """Result of code generation process.
+    
+    This class represents the output of code generation, containing the generated files
+    and optional metadata about where they were saved.
+    
+    Attributes:
+        generated_files: Dictionary mapping file names to their contents.
+                       Expected keys are 'main_py', 'requirements_txt', and 'policy_json'.
+        output_path: Optional path where the generated files were saved.
+    """
+    generated_files: dict[str, str]
+    output_path: Optional[Path] = None
 
-    prompt_template: str
-    model_name: str
-    iteration_id: str
-    run_id: str
-    generated_at: datetime
-    generated_files: Optional[dict[str, str]] = None
+    def __post_init__(self):
+        """Validate the generated files structure."""
+        required_keys = {'main_py', 'requirements_txt', 'policy_json'}
+        if not all(key in self.generated_files for key in required_keys):
+            missing = required_keys - set(self.generated_files.keys())
+            raise ValueError(f"Generated files missing required keys: {missing}")
 
 
 class ParseError(Exception):

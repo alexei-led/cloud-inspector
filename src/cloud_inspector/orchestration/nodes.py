@@ -180,69 +180,116 @@ def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) ->
 
 
 def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
-    """Generates code using CodeGeneratorAgent."""
-    # If workflow is not active or the prompt wasn't generated, skip code generation.
+    """Generates code using CodeGeneratorAgent.
+    
+    Args:
+        state: Current workflow state
+        agents: Dictionary containing required agents and configuration
+        
+    Returns:
+        Updated workflow state
+    """
     if state.get("status") != WorkflowStatus.IN_PROGRESS or "prompt" not in state["outputs"]:
         return state
 
     try:
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
-
-        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
-
+        
+        logger.debug("Generating code for prompt in iteration %d", state["iteration"])
+        
+        result: CodeGeneratorResult = code_generator.generate_code(
+            prompt=prompt,
+            model_name=agents["model_name"],
+            variables=state["params"],
+            iteration_id=f"iter_{state['iteration']}"
+        )
+        
+        # Store the CodeGeneratorResult directly
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
+        
+        logger.debug("Code generation successful for iteration %d", state["iteration"])
+        
     except ParseError as e:
-        # Specifically handle JSON parsing errors
+        logger.error("JSON parsing error in code generation: %s", str(e))
         state["status"] = WorkflowStatus.FAILED
         state["outputs"]["error"] = f"Invalid JSON format: {str(e)}"
         state["error_count"] += 1
         return state
     except Exception as e:
-        # Handle other errors
+        logger.error("Unexpected error in code generation: %s", str(e), exc_info=True)
         state["status"] = WorkflowStatus.FAILED
         state["outputs"]["error"] = str(e)
         state["error_count"] += 1
         return state
+    
     return state
 
 
 def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
-    """Executes code using CodeExecutionAgent."""
-    # If the workflow is already failed or no code has been generated, skip code execution.
+    """Executes generated code using CodeExecutionAgent.
+    
+    Args:
+        state: Current workflow state
+        agents: Dictionary containing required agents and configuration
+        
+    Returns:
+        Updated workflow state
+    """
     if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
         return state
 
     credentials = state.get("credentials")
-
     code_executor: CodeExecutionAgent = agents["code_executor"]
-    code_result = state["outputs"]["code"]
-
+    
     try:
-        # Execute the generated code
-        generated_files = code_result[0]["generated_files"] if isinstance(code_result, tuple) else code_result["generated_files"]
-
-        execution_result = code_executor.execute_generated_code(generated_files=generated_files, credentials=credentials, execution_id=f"exec_{state['iteration']}")
+        # Explicitly verify we have a CodeGeneratorResult
+        code_result = state["outputs"]["code"]
+        if not isinstance(code_result, CodeGeneratorResult):
+            raise TypeError(f"Expected CodeGeneratorResult, got {type(code_result)}")
+            
+        logger.debug("Executing generated code for iteration %d", state["iteration"])
+        
+        execution_result: ExecutionResult = code_executor.execute_generated_code(
+            generated_files=code_result.generated_files,
+            credentials=credentials,
+            execution_id=f"exec_{state['iteration']}"
+        )
 
         if execution_result.success:
-            # Try to parse output as JSON
             parsed_output = execution_result.get_parsed_output()
             if parsed_output is not None:
-                # Add parsed discovery to state
-                discovery = {"output": parsed_output, "timestamp": datetime.now().isoformat(), "iteration": state["iteration"], "execution_time": execution_result.execution_time, "resource_usage": execution_result.resource_usage}
+                discovery = {
+                    "output": parsed_output,
+                    "timestamp": datetime.now().isoformat(),
+                    "iteration": state["iteration"],
+                    "execution_time": execution_result.execution_time,
+                    "resource_usage": execution_result.resource_usage
+                }
                 state["discoveries"].append(discovery)
+                logger.info("Successfully added discovery for iteration %d", state["iteration"])
             else:
-                state["outputs"]["error"] = execution_result.error or "Code execution succeeded but did not produce valid JSON output"
+                error_msg = execution_result.error or "Code execution succeeded but did not produce valid JSON output"
+                logger.warning("No valid JSON output: %s", error_msg)
+                state["outputs"]["error"] = error_msg
         else:
-            state["outputs"]["error"] = execution_result.error or "Code execution failed"
+            error_msg = execution_result.error or "Code execution failed"
+            logger.error("Code execution failed: %s", error_msg)
+            state["outputs"]["error"] = error_msg
 
         # Update execution metrics
         state["execution_metrics"]["resource_usage"].update(execution_result.resource_usage)
-
+        
+    except TypeError as e:
+        logger.error("Type error in code execution: %s", str(e))
+        state["status"] = WorkflowStatus.FAILED
+        state["outputs"]["error"] = f"Invalid code generation result: {str(e)}"
+        state["error_count"] += 1
     except Exception as e:
-        logger.exception("Code execution node failed")
+        logger.exception("Unexpected error in code execution")
         state["outputs"]["error"] = f"Code execution error: {str(e)}"
+        state["error_count"] += 1
 
     state["updated_at"] = datetime.now()
     return state
