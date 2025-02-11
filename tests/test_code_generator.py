@@ -237,10 +237,10 @@ def test_save_result_file_error(generator, tmp_path):
     generator.output_dir = tmp_path
 
     # Patch both mkdir and open
-    with patch('pathlib.Path.mkdir', return_value=None):
-        with patch('builtins.open', mock_open_func):
-            with pytest.raises(RuntimeError) as exc:
-                generator._save_result(result)
+    with patch('pathlib.Path.mkdir', return_value=None), \
+         patch('builtins.open', mock_open_func), \
+         pytest.raises(RuntimeError) as exc:
+        generator._save_result(result)
 
     assert "Failed to save generated file" in str(exc.value)
     assert "Access denied" in str(exc.value)
