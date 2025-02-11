@@ -6,9 +6,9 @@ from typing import Any, cast
 
 from langchain.prompts import ChatPromptTemplate
 
-from cloud_inspector.code_generator import CodeGeneratorAgent, ParseError
+from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult, ParseError
 from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt, WorkflowStatus
-from cloud_inspector.execution_agent import CodeExecutionAgent
+from cloud_inspector.execution_agent import CodeExecutionAgent, ExecutionResult
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
 
 from .state import OrchestrationState
