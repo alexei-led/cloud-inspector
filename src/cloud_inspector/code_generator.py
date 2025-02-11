@@ -30,17 +30,22 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CodeGeneratorResult:
     """Result of code generation process.
-
-    This class represents the output of code generation, containing the generated files
-    and optional metadata about where they were saved.
-
+    
     Attributes:
         generated_files: Dictionary mapping file names to their contents.
                        Expected keys are 'main_py', 'requirements_txt', and 'policy_json'.
         output_path: Optional path where the generated files were saved.
+        model_name: Name of the model used for generation
+        generated_at: Timestamp when the code was generated
+        iteration_id: ID of the generation iteration
+        run_id: Optional ID of the generation run
     """
     generated_files: dict[str, str]
     output_path: Optional[Path] = None
+    model_name: Optional[str] = None
+    generated_at: Optional[datetime] = None
+    iteration_id: Optional[str] = None
+    run_id: Optional[str] = None
 
     def __post_init__(self):
         """Validate the generated files structure."""
@@ -48,6 +53,10 @@ class CodeGeneratorResult:
         if not all(key in self.generated_files for key in required_keys):
             missing = required_keys - set(self.generated_files.keys())
             raise ValueError(f"Generated files missing required keys: {missing}")
+        
+        # Set default timestamp if not provided
+        if self.generated_at is None:
+            self.generated_at = datetime.now()
 
 
 class ParseError(Exception):
@@ -245,6 +254,10 @@ You must provide your response as a JSON object that follows this exact structur
 
                 result = CodeGeneratorResult(
                     generated_files=generated_files,
+                    model_name=model_name,
+                    iteration_id=iteration_id,
+                    run_id=runs_cb.traced_runs[0].id if runs_cb.traced_runs else None,
+                    generated_at=datetime.now()
                 )
 
                 output_dir = self._save_result(result)

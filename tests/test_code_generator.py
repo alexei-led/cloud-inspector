@@ -354,9 +354,9 @@ def test_process_model_response_json_format(generator):
     }'''
     response = {"raw": mock_response, "parsed": None}
     files = generator._process_model_response(response)
-    assert "def test()" in files["main.py"]
-    assert "requests==2.0.0" in files["requirements.txt"]
-    assert files["policy.json"] == "{}"
+    assert "def test()" in files["main_py"]
+    assert "requests==2.0.0" in files["requirements_txt"]
+    assert files["policy_json"] == "{}"
 
     # Test with parsed response
     parsed_response = {
@@ -367,8 +367,8 @@ def test_process_model_response_json_format(generator):
         )
     }
     files = generator._process_model_response(parsed_response)
-    assert "def test2()" in files["main.py"]
-    assert "requests==2.1.0" in files["requirements.txt"]
+    assert "def test2()" in files["main_py"]
+    assert "requests==2.1.0" in files["requirements_txt"]
 
 def test_process_model_response_invalid_json(generator):
     """Test handling of invalid JSON response."""
@@ -405,9 +405,9 @@ def test_process_model_response_base_model(generator):
     response = TestResponse(parsed=files_content)
 
     files = generator._process_model_response(response)
-    assert "def test():" in files["main.py"]
-    assert "requests==2.0.0" in files["requirements.txt"]
-    assert files["policy.json"] == "{}"
+    assert "def test():" in files["main_py"]
+    assert "requests==2.0.0" in files["requirements_txt"]
+    assert files["policy_json"] == "{}"
 
 
 def test_code_generator_result_validation():
