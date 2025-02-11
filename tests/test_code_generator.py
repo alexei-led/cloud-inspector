@@ -14,6 +14,17 @@ from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt
 
 
 @pytest.fixture
+def valid_code_result():
+    return CodeGeneratorResult(
+        generated_files={
+            "main_py": "print('test')",
+            "requirements_txt": "boto3==1.26.0",
+            "policy_json": "{}"
+        },
+        output_path=Path("/tmp/test")
+    )
+
+@pytest.fixture
 def mock_model_registry():
     registry = Mock(spec=ModelRegistry)
     registry.validate_model_capability.return_value = True
@@ -393,3 +404,51 @@ def test_process_model_response_base_model(generator):
     assert "def test():" in files["main.py"]
     assert "requests==2.0.0" in files["requirements.txt"]
     assert files["policy.json"] == "{}"
+
+
+def test_code_generator_result_validation():
+    """Test CodeGeneratorResult validation of required keys."""
+    # Test valid case
+    valid_result = CodeGeneratorResult(
+        generated_files={
+            "main_py": "print('test')",
+            "requirements_txt": "boto3==1.26.0",
+            "policy_json": "{}"
+        }
+    )
+    assert valid_result is not None
+
+    # Test missing required key
+    with pytest.raises(ValueError) as exc:
+        CodeGeneratorResult(
+            generated_files={
+                "main_py": "print('test')",
+                "requirements_txt": "boto3==1.26.0"
+                # missing policy_json
+            }
+        )
+    assert "missing required keys" in str(exc.value).lower()
+
+
+def test_code_generator_result_optional_output_path():
+    """Test CodeGeneratorResult with and without output_path."""
+    # Without output path
+    result1 = CodeGeneratorResult(
+        generated_files={
+            "main_py": "print('test')",
+            "requirements_txt": "boto3==1.26.0",
+            "policy_json": "{}"
+        }
+    )
+    assert result1.output_path is None
+
+    # With output path
+    result2 = CodeGeneratorResult(
+        generated_files={
+            "main_py": "print('test')",
+            "requirements_txt": "boto3==1.26.0",
+            "policy_json": "{}"
+        },
+        output_path=Path("/tmp/test")
+    )
+    assert result2.output_path == Path("/tmp/test")
