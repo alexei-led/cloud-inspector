@@ -344,7 +344,6 @@ You must provide your response as a JSON object that follows this exact structur
         with meta_file.open("w") as f:
             json.dump(
                 {
-                    "prompt_template": result.prompt_template,
                     "model_name": result.model_name,
                     "generated_at": result.generated_at.isoformat(),
                     "run_id": str(result.run_id) if result.run_id else None,

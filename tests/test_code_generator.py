@@ -205,13 +205,27 @@ def test_save_result_file_error(generator):
             "main_py": "def test(): pass",
             "requirements_txt": "requests",
             "policy_json": "{}"
-        }
+        },
+        model_name="test-model",
+        generated_at=datetime.now(),
+        iteration_id="test-1"
     )
 
-    with patch("builtins.open", mock_open()) as mock_file:
-        mock_file.side_effect = [None, PermissionError("Access denied"), None, None]
-        output_dir = generator._save_result(result)
-        assert isinstance(output_dir, Path)
+    # Create a mock that raises PermissionError for the second file
+    mock_files = {
+        'main.py': mock_open().return_value,
+        'requirements.txt': Mock(side_effect=PermissionError("Access denied")),
+        'policy.json': mock_open().return_value,
+        'metadata.json': mock_open().return_value
+    }
+
+    def mock_open_func(filename, mode):
+        return mock_files[str(filename).split('/')[-1]]
+
+    with patch('builtins.open', mock_open_func):
+        with pytest.raises(RuntimeError) as exc:
+            generator._save_result(result)
+        assert "Failed to save generated file" in str(exc.value)
 
 
 def test_process_model_response_with_empty_files(generator):
