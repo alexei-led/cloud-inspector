@@ -174,6 +174,7 @@ def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) ->
     except Exception as e:
         state["status"] = WorkflowStatus.FAILED
         state["outputs"]["error"] = str(e)
+        state["error_count"] += 1  # Add this line to increment error count
         return state
     return state
 
