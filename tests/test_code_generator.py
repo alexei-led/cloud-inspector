@@ -219,33 +219,163 @@ def test_prepare_messages_json_format(generator, test_prompt):
     assert any("respond with a valid JSON object" in msg["content"] for msg in messages)
 
 
-def test_process_model_response_json_format(generator):
-    """Test processing of JSON formatted model response"""
+def test_parse_raw_response_with_mock(generator):
+    """Test parsing raw response from Mock object."""
     mock_response = Mock()
-    mock_response.content = """{
+    mock_response.content = '{"key": "value"}'
+    
+    result = generator._parse_raw_response(mock_response)
+    assert isinstance(result, dict)
+    assert result["key"] == "value"
+
+def test_parse_raw_response_with_dict(generator):
+    """Test parsing raw response that's already a dict."""
+    input_dict = {"key": "value"}
+    result = generator._parse_raw_response(input_dict)
+    assert result == input_dict
+
+def test_parse_raw_response_invalid_json(generator):
+    """Test parsing invalid JSON string."""
+    with pytest.raises(ParseError) as exc:
+        generator._parse_raw_response("invalid json")
+    assert "Invalid JSON response" in str(exc.value)
+
+def test_extract_files_from_messages_direct_dict(generator):
+    """Test extracting files from direct dictionary format."""
+    messages = {
         "main_py": "def test(): pass",
         "requirements_txt": "requests==2.0.0",
         "policy_json": "{}"
-    }"""
+    }
+    result = generator._extract_files_from_messages(messages)
+    assert result == messages
 
+def test_extract_files_from_messages_missing_keys(generator):
+    """Test handling dictionary with missing required keys."""
+    messages = {
+        "main_py": "def test(): pass",
+        "requirements_txt": "requests==2.0.0"
+        # missing policy_json
+    }
+    with pytest.raises(ParseError) as exc:
+        generator._extract_files_from_messages(messages)
+    assert "missing required file keys" in str(exc.value).lower()
+
+def test_extract_files_from_messages_list_format(generator):
+    """Test extracting files from list of messages format."""
+    messages = [
+        {
+            "type": "tool_use",
+            "name": "GeneratedFiles",
+            "input": {
+                "main_py": "def test1(): pass",
+                "requirements_txt": "requests==1.0.0",
+                "policy_json": "{}"
+            }
+        },
+        {
+            "type": "tool_use",
+            "name": "GeneratedFiles",
+            "input": {
+                "main_py": "def test2(): pass",
+                "requirements_txt": "requests==2.0.0",
+                "policy_json": "{}"
+            }
+        }
+    ]
+    result = generator._extract_files_from_messages(messages)
+    # Should contain the latest values
+    assert "test2()" in result["main_py"]
+    assert "2.0.0" in result["requirements_txt"]
+
+def test_extract_files_from_messages_empty_list(generator):
+    """Test handling empty list of messages."""
+    with pytest.raises(ParseError) as exc:
+        generator._extract_files_from_messages([])
+    assert "No GeneratedFiles content found" in str(exc.value)
+
+def test_is_valid_generated_files_message(generator):
+    """Test validation of GeneratedFiles messages."""
+    valid_msg = {
+        "type": "tool_use",
+        "name": "GeneratedFiles",
+        "input": {}
+    }
+    assert generator._is_valid_generated_files_message(valid_msg) is True
+    
+    invalid_msg = {
+        "type": "tool_use",
+        "name": "OtherTool",
+        "input": {}
+    }
+    assert generator._is_valid_generated_files_message(invalid_msg) is False
+
+def test_update_latest_files(generator):
+    """Test updating latest files with new content."""
+    latest_files = {
+        "main_py": "old code",
+        "requirements_txt": "old req",
+        "policy_json": "old policy"
+    }
+    new_input = {
+        "main_py": "new code",
+        "requirements_txt": "new req",
+        # policy_json not included
+    }
+    generator._update_latest_files(latest_files, new_input)
+    
+    assert latest_files["main_py"] == "new code"
+    assert latest_files["requirements_txt"] == "new req"
+    assert latest_files["policy_json"] == "old policy"  # Should retain old value
+
+def test_process_model_response_json_format(generator):
+    """Test processing of JSON formatted model response."""
+    # Test with raw response
+    mock_response = Mock()
+    mock_response.content = '''{
+        "main_py": "def test(): pass",
+        "requirements_txt": "requests==2.0.0",
+        "policy_json": "{}"
+    }'''
     response = {"raw": mock_response, "parsed": None}
-
     files = generator._process_model_response(response)
     assert "def test()" in files["main.py"]
     assert "requests==2.0.0" in files["requirements.txt"]
     assert files["policy.json"] == "{}"
 
+    # Test with parsed response
+    parsed_response = {
+        "parsed": GeneratedFiles(
+            main_py="def test2(): pass",
+            requirements_txt="requests==2.1.0",
+            policy_json="{}"
+        )
+    }
+    files = generator._process_model_response(parsed_response)
+    assert "def test2()" in files["main.py"]
+    assert "requests==2.1.0" in files["requirements.txt"]
 
 def test_process_model_response_invalid_json(generator):
-    """Test handling of invalid JSON response"""
+    """Test handling of invalid JSON response."""
+    # Test with invalid JSON string
     mock_response = Mock()
     mock_response.content = "Invalid JSON content"
-
     response = {"raw": mock_response, "parsed": None}
-
     with pytest.raises(ParseError) as exc:
         generator._process_model_response(response)
     assert "Invalid JSON response" in str(exc.value)
+
+    # Test with invalid response type
+    with pytest.raises(ParseError) as exc:
+        generator._process_model_response("not a dict or BaseModel")
+    assert "Expected dictionary or BaseModel" in str(exc.value)
+
+    # Test with missing required keys
+    mock_response.content = '{"main_py": "code"}'  # Missing other required keys
+    response = {"raw": mock_response, "parsed": None}
+    with pytest.raises(ParseError) as exc:
+        generator._process_model_response(response)
+    assert "missing required file keys" in str(exc.value).lower()
 
 
 def test_process_model_response_base_model(generator):
