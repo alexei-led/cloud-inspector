@@ -244,8 +244,10 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     code_executor: CodeExecutionAgent = agents["code_executor"]
 
     try:
-        # Explicitly verify we have a CodeGeneratorResult
+        # Get the code result
         code_result = state["outputs"]["code"]
+        if isinstance(code_result, tuple):
+            code_result = code_result[0]  # Extract CodeGeneratorResult from tuple
         if not isinstance(code_result, CodeGeneratorResult):
             raise TypeError(f"Expected CodeGeneratorResult, got {type(code_result)}")
 

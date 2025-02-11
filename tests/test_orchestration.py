@@ -33,15 +33,12 @@ def mock_prompt_generator():
 def mock_code_generator():
     """Mock code generator that returns test code files."""
     generator = Mock(spec=CodeGeneratorAgent)
-    generator.generate_code.return_value = (
-        CodeGeneratorResult(
-            generated_files={
-                "main_py": "print('test')",
-                "requirements_txt": "boto3==1.26.0",
-                "policy_json": "{}"
-            }
-        ),
-        Path("/tmp/test")
+    generator.generate_code.return_value = CodeGeneratorResult(
+        generated_files={
+            "main_py": "print('test')",
+            "requirements_txt": "boto3==1.26.0",
+            "policy_json": "{}"
+        }
     )
     return generator
 

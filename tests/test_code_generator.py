@@ -201,7 +201,11 @@ def test_reformat_code_black_error(mock_black, generator):
 def test_save_result_file_error(generator):
     """Test handling of file write errors"""
     result = CodeGeneratorResult(
-        prompt_template="test", model_name="test-model", iteration_id="test-1", run_id="run-1", generated_at=datetime.now(), generated_files={"main.py": "def test(): pass", "requirements.txt": "requests", "policy.json": "{}"}
+        generated_files={
+            "main_py": "def test(): pass",
+            "requirements_txt": "requests",
+            "policy_json": "{}"
+        }
     )
 
     with patch("builtins.open", mock_open()) as mock_file:

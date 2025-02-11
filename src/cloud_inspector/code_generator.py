@@ -206,9 +206,9 @@ You must provide your response as a JSON object that follows this exact structur
             latest_files = self._extract_latest_generated_files(raw_response)
 
             return {
-                "main.py": self._reformat_code(latest_files["main_py"], code=True),
-                "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
-                "policy.json": self._reformat_code(latest_files["policy_json"]),
+                "main_py": self._reformat_code(latest_files["main_py"], code=True),
+                "requirements_txt": self._reformat_code(latest_files["requirements_txt"]),
+                "policy_json": self._reformat_code(latest_files["policy_json"]),
             }
         except Exception as e:
             if isinstance(e, ParseError):
@@ -244,16 +244,12 @@ You must provide your response as a JSON object that follows this exact structur
                 generated_files = self._process_model_response(response)
 
                 result = CodeGeneratorResult(
-                    prompt_template=prompt.template,
-                    model_name=model_name,
-                    iteration_id=iteration_id,
-                    run_id=str(runs_cb.traced_runs[0].id),
-                    generated_at=datetime.now(),
                     generated_files=generated_files,
                 )
 
                 output_dir = self._save_result(result)
-                return result, output_dir
+                result.output_path = output_dir
+                return result
 
         except Exception as e:
             raise e
