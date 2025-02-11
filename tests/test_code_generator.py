@@ -152,9 +152,9 @@ def test_generate_code_structured_output_parsing(generator, test_prompt):
         assert isinstance(result.generated_at, datetime)
 
         # Verify files were processed and formatted
-        assert "handler" in result.generated_files["main_py"]
-        assert "aws-lambda-powertools" in result.generated_files["requirements_txt"]
-        assert "2012-10-17" in result.generated_files["policy_json"]
+        assert "handler" in result.generated_files.main_py
+        assert "aws-lambda-powertools" in result.generated_files.requirements_txt
+        assert "2012-10-17" in result.generated_files.policy_json
 
         # Verify output directory was set and exists
         assert result.output_path is not None
@@ -250,7 +250,9 @@ def test_process_model_response_with_empty_files(generator):
     """Test processing model response with empty file content"""
     response = {"parsed": GeneratedFiles(main_py="", requirements_txt="", policy_json="")}
     files = generator._process_model_response(response)
-    assert all(content == "" for content in files.values())
+    assert files.main_py == ""
+    assert files.requirements_txt == ""
+    assert files.policy_json == ""
 
 
 def test_prepare_messages_json_format(generator, test_prompt):
@@ -386,9 +388,9 @@ def test_process_model_response_json_format(generator):
     }'''
     response = {"raw": mock_response, "parsed": None}
     files = generator._process_model_response(response)
-    assert "def test()" in files["main_py"]
-    assert "requests==2.0.0" in files["requirements_txt"]
-    assert files["policy_json"] == "{}"
+    assert "def test()" in files.main_py
+    assert "requests==2.0.0" in files.requirements_txt
+    assert files.policy_json == "{}"
 
     # Test with parsed response
     parsed_response = {
@@ -437,9 +439,9 @@ def test_process_model_response_base_model(generator):
     response = TestResponse(parsed=files_content)
 
     files = generator._process_model_response(response)
-    assert "def test():" in files["main_py"]
-    assert "requests==2.0.0" in files["requirements_txt"]
-    assert files["policy_json"] == "{}"
+    assert "def test():" in files.main_py
+    assert "requests==2.0.0" in files.requirements_txt
+    assert files.policy_json == "{}"
 
 
 def test_code_generator_result_validation():
@@ -454,16 +456,7 @@ def test_code_generator_result_validation():
     )
     assert valid_result is not None
 
-    # Test missing required key
-    with pytest.raises(ValueError) as exc:
-        CodeGeneratorResult(
-            generated_files=GeneratedFiles(
-                main_py="print('test')",
-                requirements_txt="boto3==1.26.0",
-                policy_json=""  # empty but valid
-            )
-        )
-    assert "missing required keys" in str(exc.value).lower()
+    # Validation no longer raises an error for empty strings
 
 
 def test_code_generator_result_optional_output_path():

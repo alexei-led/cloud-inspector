@@ -100,7 +100,7 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
 
     # Check that generated_files exists and has the expected structure
     assert "generated_files" in kwargs
-    assert isinstance(kwargs["generated_files"], dict)
+    assert isinstance(kwargs["generated_files"], GeneratedFiles)
 
     # Check the credentials parameter
     assert kwargs["credentials"] == {"key": "value", "number": 123}
