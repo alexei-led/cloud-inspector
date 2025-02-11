@@ -33,8 +33,7 @@ class CodeGeneratorResult:
     """Result of code generation process.
 
     Attributes:
-        generated_files: Dictionary mapping file names to their contents.
-                       Expected keys are 'main_py', 'requirements_txt', and 'policy_json'.
+        generated_files: GeneratedFiles instance containing generated code and configs
         output_path: Optional path where the generated files were saved.
         model_name: Name of the model used for generation
         generated_at: Timestamp when the code was generated
@@ -42,7 +41,7 @@ class CodeGeneratorResult:
         run_id: Optional ID of the generation run
     """
 
-    generated_files: dict[str, str]
+    generated_files: GeneratedFiles
     output_path: Optional[Path] = None
     model_name: Optional[str] = None
     generated_at: datetime = datetime.now()
@@ -51,10 +50,8 @@ class CodeGeneratorResult:
 
     def __post_init__(self):
         """Validate the generated files structure."""
-        required_keys = {"main_py", "requirements_txt", "policy_json"}
-        if not all(key in self.generated_files for key in required_keys):
-            missing = required_keys - set(self.generated_files.keys())
-            raise ValueError(f"Generated files missing required keys: {missing}")
+        if not isinstance(self.generated_files, GeneratedFiles):
+            raise ValueError("generated_files must be an instance of GeneratedFiles")
 
         # Set default timestamp if not provided
         if self.generated_at is None:
@@ -111,13 +108,14 @@ class CodeGeneratorAgent:
 
         return chat_prompt.format_messages(**variables)
 
-    def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock, None]) -> dict[str, str]:
+    def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock, None]) -> GeneratedFiles:
         """Extract latest GeneratedFiles content from model response."""
         if raw_response is None:
             raise ParseError("Response cannot be None")
 
         messages = self._parse_raw_response(raw_response)
-        return self._extract_files_from_messages(messages)
+        files_dict = self._extract_files_from_messages(messages)
+        return GeneratedFiles(**files_dict)
 
     def _parse_raw_response(self, raw_response: Union[str, dict, Mock]) -> Union[dict, list]:
         """Parse raw response into a structured format."""
@@ -196,10 +194,9 @@ You must provide your response as a JSON object that follows this exact structur
 
         return messages
 
-    def _process_model_response(self, response: Union[dict[str, Any], BaseModel]) -> dict[str, str]:
+    def _process_model_response(self, response: Union[dict[str, Any], BaseModel]) -> GeneratedFiles:
         """Process and format the model's response."""
         try:
-            # Convert BaseModel to dict if needed
             if isinstance(response, BaseModel):
                 response = response.model_dump()
             elif not isinstance(response, dict):
@@ -207,20 +204,15 @@ You must provide your response as a JSON object that follows this exact structur
 
             if response.get("parsed") is not None:
                 parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
-                return {
-                    "main_py": self._reformat_code(parsed["main_py"], code=True),
-                    "requirements_txt": self._reformat_code(parsed["requirements_txt"]),
-                    "policy_json": self._reformat_code(parsed["policy_json"]),
-                }
+                return GeneratedFiles(
+                    main_py=self._reformat_code(parsed["main_py"], code=True),
+                    requirements_txt=self._reformat_code(parsed["requirements_txt"]),
+                    policy_json=self._reformat_code(parsed["policy_json"])
+                )
 
             raw_response = response.get("raw")
             latest_files = self._extract_latest_generated_files(raw_response)
-
-            return {
-                "main_py": self._reformat_code(latest_files["main_py"], code=True),
-                "requirements_txt": self._reformat_code(latest_files["requirements_txt"]),
-                "policy_json": self._reformat_code(latest_files["policy_json"]),
-            }
+            return latest_files
         except Exception as e:
             if isinstance(e, ParseError):
                 raise
@@ -324,16 +316,16 @@ You must provide your response as a JSON object that follows this exact structur
         run_dir.mkdir(parents=True, exist_ok=True)
 
         # Save generated files
-        if result.generated_files:
-            for filename, content in result.generated_files.items():
-                try:
-                    file_path = run_dir / filename.replace("_", ".")
-                    with open(file_path, "w") as f:
-                        f.write(content)
-                        f.flush()
-                except OSError as e:
-                    logger.error(f"Error saving {filename}: {e}")
-                    raise RuntimeError(f"Failed to save generated file {filename}: {e}") from e
+        files_dict = result.generated_files.model_dump()
+        for filename, content in files_dict.items():
+            try:
+                file_path = run_dir / filename.replace("_", ".")
+                with open(file_path, "w") as f:
+                    f.write(content)
+                    f.flush()
+            except OSError as e:
+                logger.error(f"Error saving {filename}: {e}")
+                raise RuntimeError(f"Failed to save generated file {filename}: {e}") from e
 
         # Save metadata
         meta_file = run_dir / "metadata.json"
