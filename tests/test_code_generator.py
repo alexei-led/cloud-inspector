@@ -198,7 +198,7 @@ def test_reformat_code_black_error(mock_black, generator):
 
 
 # Test file saving
-def test_save_result_file_error(generator):
+def test_save_result_file_error(generator, tmp_path):
     """Test handling of file write errors"""
     result = CodeGeneratorResult(
         generated_files={
@@ -211,21 +211,38 @@ def test_save_result_file_error(generator):
         iteration_id="test-1"
     )
 
-    # Create a mock that raises PermissionError for the second file
+    # Create mock file handlers
+    main_file = mock_open().return_value
+    requirements_file = mock_open()
+    requirements_file.return_value.write.side_effect = PermissionError("Access denied")
+    policy_file = mock_open().return_value
+    metadata_file = mock_open().return_value
+
     mock_files = {
-        'main.py': mock_open().return_value,
-        'requirements.txt': Mock(side_effect=PermissionError("Access denied")),
-        'policy.json': mock_open().return_value,
-        'metadata.json': mock_open().return_value
+        'main.py': main_file,
+        'requirements.txt': requirements_file(),
+        'policy.json': policy_file,
+        'metadata.json': metadata_file
     }
 
-    def mock_open_func(filename, mode):
-        return mock_files[str(filename).split('/')[-1]]
+    def mock_open_func(file_path, mode='r'):
+        # Extract filename from path
+        filename = Path(file_path).name
+        if filename in mock_files:
+            return mock_files[filename]
+        return mock_open()()
 
-    with patch('builtins.open', mock_open_func):
-        with pytest.raises(RuntimeError) as exc:
-            generator._save_result(result)
-        assert "Failed to save generated file" in str(exc.value)
+    # Set up the output directory for the generator
+    generator.output_dir = tmp_path
+
+    # Patch both mkdir and open
+    with patch('pathlib.Path.mkdir', return_value=None):
+        with patch('builtins.open', mock_open_func):
+            with pytest.raises(RuntimeError) as exc:
+                generator._save_result(result)
+    
+    assert "Failed to save generated file" in str(exc.value)
+    assert "Access denied" in str(exc.value)
 
 
 def test_process_model_response_with_empty_files(generator):
