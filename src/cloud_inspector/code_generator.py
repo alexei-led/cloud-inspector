@@ -197,9 +197,9 @@ You must provide your response as a JSON object that follows this exact structur
             if response.get("parsed") is not None:
                 parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
                 return {
-                    "main.py": self._reformat_code(parsed["main_py"], code=True),
-                    "requirements.txt": self._reformat_code(parsed["requirements_txt"]),
-                    "policy.json": self._reformat_code(parsed["policy_json"]),
+                    "main_py": self._reformat_code(parsed["main_py"], code=True),
+                    "requirements_txt": self._reformat_code(parsed["requirements_txt"]),
+                    "policy_json": self._reformat_code(parsed["policy_json"]),
                 }
 
             raw_response = response.get("raw")
@@ -322,12 +322,13 @@ You must provide your response as a JSON object that follows this exact structur
         if result.generated_files:
             for filename, content in result.generated_files.items():
                 try:
-                    file_path = run_dir / filename
+                    file_path = run_dir / filename.replace("_", ".")
                     with open(file_path, "w") as f:
                         f.write(content)
                         f.flush()
-                except Exception as e:
-                    print(f"Error saving {filename}: {e}")
+                except (OSError, IOError) as e:
+                    logger.error(f"Error saving {filename}: {e}")
+                    raise RuntimeError(f"Failed to save generated file {filename}: {e}") from e
 
         # Save metadata
         meta_file = run_dir / "metadata.json"

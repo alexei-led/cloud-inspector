@@ -33,23 +33,14 @@ def mock_code_generator():
     """Mock code generator that returns test code files."""
     generator = Mock(spec=CodeGeneratorAgent)
     generator.generate_code.return_value = (
-        {
-            "model_name": "test-model",
-            "iteration_id": "test-1",
-            "run_id": "run-1",
-            "generated_files": {
-                "main.py": """
-            {
+        CodeGeneratorResult(
+            generated_files={
                 "main_py": "print('test')",
                 "requirements_txt": "boto3==1.26.0",
                 "policy_json": "{}"
             }
-            """,
-                "requirements.txt": "boto3==1.26.0",
-                "policy.json": "{}",
-            },
-        },
-        Mock(),
+        ),
+        Path("/tmp/test")
     )
     return generator
 
@@ -60,7 +51,14 @@ def mock_model_registry():
     mock_registry = Mock()
     mock_model = Mock()
     mock_model.invoke.return_value = Mock(content="unique")  # default response
+    mock_model.with_structured_output.return_value = mock_model
     mock_registry.get_model.return_value = mock_model
+    mock_registry.validate_model_capability.return_value = True
+    mock_registry.get_structured_output_params.return_value = {
+        "include_raw": True,
+        "response_format": {"type": "json"},
+        "max_tokens": 2000
+    }
     return mock_registry
 
 
