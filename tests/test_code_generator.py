@@ -401,8 +401,8 @@ def test_process_model_response_json_format(generator):
         )
     }
     files = generator._process_model_response(parsed_response)
-    assert "def test2()" in files["main_py"]
-    assert "requests==2.1.0" in files["requirements_txt"]
+    assert "def test2()" in files.main_py
+    assert "requests==2.1.0" in files.requirements_txt
 
 def test_process_model_response_invalid_json(generator):
     """Test handling of invalid JSON response."""
