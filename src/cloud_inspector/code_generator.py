@@ -10,6 +10,7 @@ from io import StringIO
 from pathlib import Path
 from typing import Any, Optional, Union
 from unittest.mock import Mock
+from uuid import UUID
 
 # Third-party imports
 import autopep8
@@ -40,16 +41,17 @@ class CodeGeneratorResult:
         iteration_id: ID of the generation iteration
         run_id: Optional ID of the generation run
     """
+
     generated_files: dict[str, str]
     output_path: Optional[Path] = None
     model_name: Optional[str] = None
-    generated_at: Optional[datetime] = None
+    generated_at: datetime = datetime.now()
     iteration_id: Optional[str] = None
-    run_id: Optional[str] = None
+    run_id: Optional[UUID] = None
 
     def __post_init__(self):
         """Validate the generated files structure."""
-        required_keys = {'main_py', 'requirements_txt', 'policy_json'}
+        required_keys = {"main_py", "requirements_txt", "policy_json"}
         if not all(key in self.generated_files for key in required_keys):
             missing = required_keys - set(self.generated_files.keys())
             raise ValueError(f"Generated files missing required keys: {missing}")
@@ -252,13 +254,7 @@ You must provide your response as a JSON object that follows this exact structur
 
                 generated_files = self._process_model_response(response)
 
-                result = CodeGeneratorResult(
-                    generated_files=generated_files,
-                    model_name=model_name,
-                    iteration_id=iteration_id,
-                    run_id=runs_cb.traced_runs[0].id if runs_cb.traced_runs else None,
-                    generated_at=datetime.now()
-                )
+                result = CodeGeneratorResult(generated_files=generated_files, model_name=model_name, iteration_id=iteration_id, run_id=runs_cb.traced_runs[0].id if runs_cb.traced_runs else None, generated_at=datetime.now())
 
                 output_dir = self._save_result(result)
                 result.output_path = output_dir
