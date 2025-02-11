@@ -5,6 +5,8 @@ from unittest.mock import Mock
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
+from cloud_inspector.code_generator import ParseError
+
 from cloud_inspector.code_generator import CodeGeneratorAgent
 from cloud_inspector.components.types import CloudProvider, WorkflowStatus
 from cloud_inspector.execution_agent import CodeExecutionAgent
