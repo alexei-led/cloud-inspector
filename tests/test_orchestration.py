@@ -32,7 +32,22 @@ def mock_prompt_generator():
 def mock_code_generator():
     """Mock code generator that returns test code files."""
     generator = Mock(spec=CodeGeneratorAgent)
-    generator.generate_code.return_value = ({"model_name": "test-model", "iteration_id": "test-1", "run_id": "run-1", "generated_files": {"main.py": "print('test')", "requirements.txt": "boto3==1.26.0", "policy.json": "{}"}}, Mock())
+    generator.generate_code.return_value = ({
+        "model_name": "test-model",
+        "iteration_id": "test-1",
+        "run_id": "run-1",
+        "generated_files": {
+            "main.py": '''
+            {
+                "main_py": "print('test')",
+                "requirements_txt": "boto3==1.26.0",
+                "policy_json": "{}"
+            }
+            ''',
+            "requirements.txt": "boto3==1.26.0",
+            "policy.json": "{}"
+        }
+    }, Mock())
     return generator
 
 
@@ -281,6 +296,29 @@ def test_workflow_with_model_failure(mock_prompt_generator, mock_code_generator,
     assert result["status"] == WorkflowStatus.FAILED
     assert "Model API error" in result["outputs"]["error"]
 
+
+def test_workflow_json_format_validation(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
+    """Test workflow handles JSON format validation properly."""
+    # Configure model to return non-JSON response
+    mock_model = mock_model_registry.get_model.return_value
+    mock_model.invoke.return_value = Mock(content="Invalid non-JSON response")
+
+    agent = OrchestrationAgent(
+        model_name="test-model",
+        prompt_generator=mock_prompt_generator,
+        code_generator=mock_code_generator,
+        code_executor=mock_code_executor,
+        model_registry=mock_model_registry
+    )
+
+    result = agent.execute(
+        request="Test request",
+        cloud=CloudProvider.AWS,
+        service="ec2"
+    )
+
+    assert result["status"] == WorkflowStatus.FAILED
+    assert "JSON" in result["outputs"]["error"]
 
 def test_workflow_with_checkpointing(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow with checkpointing enabled."""

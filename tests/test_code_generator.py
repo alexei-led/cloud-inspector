@@ -206,6 +206,47 @@ def test_process_model_response_with_empty_files(generator):
     assert all(content == "" for content in files.values())
 
 
+def test_prepare_messages_json_format(generator, test_prompt):
+    """Test that prepared messages include JSON format requirements"""
+    messages = generator._prepare_messages(
+        test_prompt,
+        variables={"service": "lambda", "environment": "dev"}
+    )
+    
+    # Check system message contains JSON structure
+    assert any('"main_py"' in msg["content"] for msg in messages)
+    assert any('"requirements_txt"' in msg["content"] for msg in messages)
+    assert any('"policy_json"' in msg["content"] for msg in messages)
+    
+    # Check user message requests JSON response
+    assert any("respond with a valid JSON object" in msg["content"] for msg in messages)
+
+def test_process_model_response_json_format(generator):
+    """Test processing of JSON formatted model response"""
+    json_response = {
+        "raw": Mock(content='''
+        {
+            "main_py": "def test(): pass",
+            "requirements_txt": "requests==2.0.0",
+            "policy_json": "{}"
+        }
+        ''')
+    }
+    
+    files = generator._process_model_response(json_response)
+    assert "def test():" in files["main.py"]
+    assert "requests==2.0.0" in files["requirements.txt"]
+    assert files["policy.json"] == "{}"
+
+def test_process_model_response_invalid_json(generator):
+    """Test handling of invalid JSON response"""
+    invalid_response = {
+        "raw": Mock(content="Invalid JSON content")
+    }
+    
+    with pytest.raises(ParseError):
+        generator._process_model_response(invalid_response)
+
 def test_process_model_response_base_model(generator):
     """Test processing of BaseModel response"""
 
