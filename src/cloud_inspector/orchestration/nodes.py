@@ -189,13 +189,26 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
 
-        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
+        result = code_generator.generate_code(
+            prompt=prompt, 
+            model_name=agents["model_name"], 
+            variables=state["params"], 
+            iteration_id=f"iter_{state['iteration']}"
+        )
 
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
+    except ParseError as e:
+        # Specifically handle JSON parsing errors
+        state["status"] = WorkflowStatus.FAILED
+        state["outputs"]["error"] = f"Invalid JSON format: {str(e)}"
+        state["error_count"] += 1
+        return state
     except Exception as e:
+        # Handle other errors
         state["status"] = WorkflowStatus.FAILED
         state["outputs"]["error"] = str(e)
+        state["error_count"] += 1
         return state
     return state
 

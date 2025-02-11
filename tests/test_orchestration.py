@@ -301,7 +301,7 @@ def test_workflow_with_model_failure(mock_prompt_generator, mock_code_generator,
 
 def test_workflow_json_format_validation(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow handles JSON format validation properly."""
-    # Configure model to return non-JSON response that will fail parsing
+    # Configure model to return non-JSON response
     mock_model = mock_model_registry.get_model.return_value
     mock_model.invoke.return_value = Mock(content="Invalid non-JSON response")
     
@@ -316,15 +316,23 @@ def test_workflow_json_format_validation(mock_prompt_generator, mock_code_genera
         model_registry=mock_model_registry
     )
 
+    # Execute workflow
     result = agent.execute(
         request="Test request",
         cloud=CloudProvider.AWS,
         service="ec2"
     )
 
+    # Verify the failure was properly handled
     assert result["status"] == WorkflowStatus.FAILED
     assert "Invalid JSON" in result["outputs"]["error"]
     assert result["error_count"] > 0
+    
+    # Verify code generator was called with correct parameters
+    mock_code_generator.generate_code.assert_called_once()
+    
+    # Verify code executor was not called (should stop at code generation)
+    mock_code_executor.execute_generated_code.assert_not_called()
 
 def test_workflow_with_checkpointing(mock_prompt_generator, mock_code_generator, mock_code_executor, mock_model_registry):
     """Test workflow with checkpointing enabled."""
