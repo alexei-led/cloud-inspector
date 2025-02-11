@@ -79,12 +79,21 @@ def test_successful_execution(mock_prompt_generator, mock_code_generator, mock_c
     extra_params = {"credentials": {"key": "value", "number": 123}}
     result = agent.execute(request="Test request", cloud=CloudProvider.AWS, service="ec2", params=extra_params)
 
-    expected_credentials = {"key": "value", "number": 123}
-    mock_code_executor.execute_generated_code.assert_called_with(
-        ANY,  # generated_files (or use a matching helper)
-        credentials=expected_credentials,
-        execution_id=ANY,
-    )
+    # Verify the call using call_args
+    call_args = mock_code_executor.execute_generated_code.call_args
+    assert call_args is not None
+    args, kwargs = call_args
+    
+    # Check that generated_files exists and has the expected structure
+    assert "generated_files" in kwargs
+    assert isinstance(kwargs["generated_files"], dict)
+    
+    # Check the credentials parameter
+    assert kwargs["credentials"] == {"key": "value", "number": 123}
+    
+    # Check that execution_id exists and is a string
+    assert "execution_id" in kwargs
+    assert isinstance(kwargs["execution_id"], str)
 
     assert result["status"] == WorkflowStatus.COMPLETED
     assert result["reason"] == "no_new_information_found"
