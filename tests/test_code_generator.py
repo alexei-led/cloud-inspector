@@ -223,7 +223,6 @@ def test_prepare_messages_json_format(generator, test_prompt):
 
 def test_process_model_response_json_format(generator):
     """Test processing of JSON formatted model response"""
-    # Create a mock with content property that returns the JSON string
     mock_response = Mock()
     mock_response.content = '''{
         "main_py": "def test(): pass",
@@ -231,27 +230,29 @@ def test_process_model_response_json_format(generator):
         "policy_json": "{}"
     }'''
     
-    json_response = {
-        "raw": mock_response
+    response = {
+        "raw": mock_response,
+        "parsed": None
     }
     
-    files = generator._process_model_response(json_response)
-    assert "def test():" in files["main.py"]
+    files = generator._process_model_response(response)
+    assert "def test()" in files["main.py"]
     assert "requests==2.0.0" in files["requirements.txt"]
     assert files["policy.json"] == "{}"
 
 def test_process_model_response_invalid_json(generator):
     """Test handling of invalid JSON response"""
-    # Create a mock with content property that returns invalid JSON
     mock_response = Mock()
     mock_response.content = "Invalid JSON content"
     
-    invalid_response = {
-        "raw": mock_response
+    response = {
+        "raw": mock_response,
+        "parsed": None
     }
     
-    with pytest.raises(ParseError):
-        generator._process_model_response(invalid_response)
+    with pytest.raises(ParseError) as exc:
+        generator._process_model_response(response)
+    assert "Invalid JSON response" in str(exc.value)
 
 def test_process_model_response_base_model(generator):
     """Test processing of BaseModel response"""

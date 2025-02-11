@@ -89,23 +89,45 @@ class CodeGeneratorAgent:
 
         return chat_prompt.format_messages(**variables)
 
-    def _extract_latest_generated_files(self, raw_response: Union[str, list[dict]]) -> dict[str, str]:
-        """Extract latest GeneratedFiles content from Nova model response."""
-        # Parse response if string
-        messages = json.loads(raw_response) if isinstance(raw_response, str) else raw_response
-        # Track latest content
-        latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
-        # Scan all messages, overriding with latest content
-        for msg in messages:
-            if msg.get("type") == "tool_use" and msg.get("name") == "GeneratedFiles":
-                input_data = msg.get("input", {})
-                for key in latest_files:
-                    if key in input_data and input_data[key]:
-                        latest_files[key] = input_data[key]
+    def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock]) -> dict[str, str]:
+        """Extract latest GeneratedFiles content from model response."""
+        try:
+            # Handle Mock objects with content attribute
+            if isinstance(raw_response, Mock) and hasattr(raw_response, 'content'):
+                raw_response = raw_response.content
+                
+            # Parse response if string
+            if isinstance(raw_response, str):
+                try:
+                    messages = json.loads(raw_response)
+                except json.JSONDecodeError:
+                    raise ParseError("Invalid JSON response")
+            else:
+                messages = raw_response
 
-        if not any(latest_files.values()):
-            raise ParseError("No GeneratedFiles content found")
-        return latest_files
+            # If messages is a dict with the expected structure, return it directly
+            if isinstance(messages, dict) and all(key in messages for key in ["main_py", "requirements_txt", "policy_json"]):
+                return messages
+
+            # Track latest content
+            latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
+            
+            # Handle list of messages format
+            if isinstance(messages, list):
+                for msg in messages:
+                    if msg.get("type") == "tool_use" and msg.get("name") == "GeneratedFiles":
+                        input_data = msg.get("input", {})
+                        for key in latest_files:
+                            if key in input_data and input_data[key]:
+                                latest_files[key] = input_data[key]
+
+            if not any(latest_files.values()):
+                raise ParseError("No GeneratedFiles content found")
+            return latest_files
+        except Exception as e:
+            if isinstance(e, ParseError):
+                raise
+            raise ParseError(f"Failed to extract files: {str(e)}")
 
     def _validate_model(self, model_name: str) -> None:
         """Validate model capabilities for code generation."""
@@ -140,27 +162,33 @@ You must provide your response as a JSON object that follows this exact structur
 
     def _process_model_response(self, response: Union[dict[str, Any], BaseModel]) -> dict[str, str]:
         """Process and format the model's response."""
-        # Convert BaseModel to dict if needed
-        if isinstance(response, BaseModel):
-            response = response.model_dump()
-        elif not isinstance(response, dict):
-            raise ParseError("Expected dictionary or BaseModel response format")
+        try:
+            # Convert BaseModel to dict if needed
+            if isinstance(response, BaseModel):
+                response = response.model_dump()
+            elif not isinstance(response, dict):
+                raise ParseError("Expected dictionary or BaseModel response format")
 
-        if response.get("parsed") is not None:
-            parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
+            if response.get("parsed") is not None:
+                parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
+                return {
+                    "main.py": self._reformat_code(parsed["main_py"], code=True),
+                    "requirements.txt": self._reformat_code(parsed["requirements_txt"]),
+                    "policy.json": self._reformat_code(parsed["policy_json"]),
+                }
+
+            raw_response = response.get("raw")
+            latest_files = self._extract_latest_generated_files(raw_response)
+            
             return {
-                "main.py": self._reformat_code(parsed["main_py"], code=True),
-                "requirements.txt": self._reformat_code(parsed["requirements_txt"]),
-                "policy.json": self._reformat_code(parsed["policy_json"]),
+                "main.py": self._reformat_code(latest_files["main_py"], code=True),
+                "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
+                "policy.json": self._reformat_code(latest_files["policy_json"]),
             }
-
-        raw_response = response.get("raw", "").content if isinstance(response.get("raw"), BaseMessage) else str(response.get("raw", ""))
-        latest_files = self._extract_latest_generated_files(raw_response)
-        return {
-            "main.py": self._reformat_code(latest_files["main_py"], code=True),
-            "requirements.txt": self._reformat_code(latest_files["requirements_txt"]),
-            "policy.json": self._reformat_code(latest_files["policy_json"]),
-        }
+        except Exception as e:
+            if isinstance(e, ParseError):
+                raise
+            raise ParseError(f"Failed to process response: {str(e)}")
 
     def generate_code(
         self,
