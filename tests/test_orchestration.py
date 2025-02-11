@@ -1,9 +1,12 @@
 """Test cases for the orchestration workflow."""
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
+
+from cloud_inspector.code_generator import CodeGeneratorResult
 
 from cloud_inspector.code_generator import CodeGeneratorAgent, ParseError
 from cloud_inspector.components.types import CloudProvider, WorkflowStatus
