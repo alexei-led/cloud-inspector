@@ -105,7 +105,7 @@ class DockerSandbox:
         self,
         main_py: str,
         requirements_txt: str,
-        aws_credentials: Optional[dict[str, str]] = None,
+        credentials: Optional[dict[str, str]] = None,
     ) -> tuple[bool, str, str, dict]:
         """Execute code in sandbox.
 
@@ -127,11 +127,11 @@ class DockerSandbox:
             (temp_path / "main.py").write_text(main_py)
             (temp_path / "requirements.txt").write_text(requirements_txt)
 
-            # Write AWS credentials if provided
-            if aws_credentials:
+            # Write credentials if provided
+            if credentials:
                 creds_file = temp_path / "credentials"
                 creds_content = "[default]\n"
-                for key, value in aws_credentials.items():
+                for key, value in credentials.items():
                     creds_content += f"{key} = {value}\n"
                 creds_file.write_text(creds_content)
 
@@ -160,7 +160,7 @@ python /code/main.py
                         mem_limit=self.memory_limit,
                         environment={
                             "PYTHONPATH": "/code",
-                            "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if aws_credentials else "",
+                            "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if credentials else "",
                             "PYTHONUNBUFFERED": "1",
                             "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
                         },

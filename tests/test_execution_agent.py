@@ -82,10 +82,10 @@ def test_execution_with_aws_credentials(executor):
     files = GeneratedFiles(main_py=r"""print('{"status": "success"}')""", requirements_txt="", policy_json="")
     credentials = {"AWS_ACCESS_KEY_ID": "test-key", "AWS_SECRET_ACCESS_KEY": "test-secret"}
 
-    result = executor.execute_generated_code(files, aws_credentials=credentials)
+    result = executor.execute_generated_code(files, credentials=credentials)
 
     assert result.success is True
-    assert executor.sandbox.execute.call_args[1]["aws_credentials"] == credentials  # type: ignore
+    assert executor.sandbox.execute.call_args[1]["credentials"] == credentials  # type: ignore
 
 
 def test_cleanup(executor):

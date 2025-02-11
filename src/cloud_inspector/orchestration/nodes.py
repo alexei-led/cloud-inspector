@@ -188,12 +188,7 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
         code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
 
-        result = code_generator.generate_code(
-            prompt=prompt,
-            model_name=agents["model_name"],
-            variables=state["params"],
-            iteration_id=f"iter_{state['iteration']}"
-        )
+        result = code_generator.generate_code(prompt=prompt, model_name=agents["model_name"], variables=state["params"], iteration_id=f"iter_{state['iteration']}")
 
         state["outputs"]["code"] = result
         state["updated_at"] = datetime.now()
@@ -212,7 +207,6 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 
     credentials = state.get("credentials")
 
-src/cloud_inspector/orchestration/nodes.py
     code_executor: CodeExecutionAgent = agents["code_executor"]
     code_result = state["outputs"]["code"]
 
@@ -220,11 +214,7 @@ src/cloud_inspector/orchestration/nodes.py
         # Execute the generated code
         generated_files = code_result[0]["generated_files"] if isinstance(code_result, tuple) else code_result["generated_files"]
 
-        execution_result = code_executor.execute_generated_code(
-            generated_files=generated_files,
-            credentials=credentials,
-            execution_id=f"exec_{state['iteration']}"
-        )
+        execution_result = code_executor.execute_generated_code(generated_files=generated_files, credentials=credentials, execution_id=f"exec_{state['iteration']}")
 
         if execution_result.success:
             # Try to parse output as JSON
