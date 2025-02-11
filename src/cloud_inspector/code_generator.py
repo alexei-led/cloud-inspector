@@ -91,45 +91,57 @@ class CodeGeneratorAgent:
 
     def _extract_latest_generated_files(self, raw_response: Union[str, dict, Mock, None]) -> dict[str, str]:
         """Extract latest GeneratedFiles content from model response."""
-        try:
-            if raw_response is None:
-                raise ParseError("Response cannot be None")
-            # Handle Mock objects with content attribute
-            if isinstance(raw_response, Mock) and hasattr(raw_response, "content"):
-                raw_response = raw_response.content
+        if raw_response is None:
+            raise ParseError("Response cannot be None")
 
-            # Parse response if string
-            if isinstance(raw_response, str):
-                try:
-                    messages = json.loads(raw_response)
-                except json.JSONDecodeError as e:
-                    raise ParseError("Invalid JSON response") from e
-            else:
-                messages = raw_response
+        messages = self._parse_raw_response(raw_response)
+        return self._extract_files_from_messages(messages)
 
-            # If messages is a dict with the expected structure, return it directly
-            if isinstance(messages, dict) and all(key in messages for key in ["main_py", "requirements_txt", "policy_json"]):
+    def _parse_raw_response(self, raw_response: Union[str, dict, Mock]) -> Union[dict, list]:
+        """Parse raw response into a structured format."""
+        if isinstance(raw_response, Mock) and hasattr(raw_response, "content"):
+            raw_response = raw_response.content
+
+        if isinstance(raw_response, str):
+            try:
+                return json.loads(raw_response)
+            except json.JSONDecodeError as e:
+                raise ParseError("Invalid JSON response") from e
+        
+        return raw_response
+
+    def _extract_files_from_messages(self, messages: Union[dict, list]) -> dict[str, str]:
+        """Extract files content from parsed messages."""
+        REQUIRED_KEYS = {"main_py", "requirements_txt", "policy_json"}
+        DEFAULT_FILES = {key: "" for key in REQUIRED_KEYS}
+
+        # Handle direct dictionary format
+        if isinstance(messages, dict):
+            if all(key in messages for key in REQUIRED_KEYS):
                 return messages
+            raise ParseError("Response missing required file keys")
 
-            # Track latest content
-            latest_files = {"main_py": "", "requirements_txt": "", "policy_json": ""}
+        # Handle list of messages format
+        if isinstance(messages, list):
+            latest_files = DEFAULT_FILES.copy()
+            for msg in messages:
+                if self._is_valid_generated_files_message(msg):
+                    self._update_latest_files(latest_files, msg.get("input", {}))
+            
+            if any(latest_files.values()):
+                return latest_files
 
-            # Handle list of messages format
-            if isinstance(messages, list):
-                for msg in messages:
-                    if msg.get("type") == "tool_use" and msg.get("name") == "GeneratedFiles":
-                        input_data = msg.get("input", {})
-                        for key in latest_files:
-                            if key in input_data and input_data[key]:
-                                latest_files[key] = input_data[key]
+        raise ParseError("No GeneratedFiles content found")
 
-            if not any(latest_files.values()):
-                raise ParseError("No GeneratedFiles content found")
-            return latest_files
-        except Exception as e:
-            if isinstance(e, ParseError):
-                raise
-            raise ParseError(f"Failed to extract files: {str(e)}") from e
+    def _is_valid_generated_files_message(self, msg: dict) -> bool:
+        """Check if message is a valid GeneratedFiles message."""
+        return msg.get("type") == "tool_use" and msg.get("name") == "GeneratedFiles"
+
+    def _update_latest_files(self, latest_files: dict[str, str], input_data: dict) -> None:
+        """Update latest files with new content if available."""
+        for key in latest_files:
+            if key in input_data and input_data[key]:
+                latest_files[key] = input_data[key]
 
     def _validate_model(self, model_name: str) -> None:
         """Validate model capabilities for code generation."""
