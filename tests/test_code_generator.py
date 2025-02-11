@@ -234,7 +234,7 @@ def test_parse_raw_response_with_mock(generator):
     """Test parsing raw response from Mock object."""
     mock_response = Mock()
     mock_response.content = '{"key": "value"}'
-    
+
     result = generator._parse_raw_response(mock_response)
     assert isinstance(result, dict)
     assert result["key"] == "value"
@@ -312,8 +312,8 @@ def test_is_valid_generated_files_message(generator):
         "name": "GeneratedFiles",
         "input": {}
     }
+
     assert generator._is_valid_generated_files_message(valid_msg) is True
-    
     invalid_msg = {
         "type": "tool_use",
         "name": "OtherTool",
@@ -334,7 +334,7 @@ def test_update_latest_files(generator):
         # policy_json not included
     }
     generator._update_latest_files(latest_files, new_input)
-    
+
     assert latest_files["main_py"] == "new code"
     assert latest_files["requirements_txt"] == "new req"
     assert latest_files["policy_json"] == "old policy"  # Should retain old value

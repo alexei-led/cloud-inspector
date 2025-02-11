@@ -30,10 +30,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CodeGeneratorResult:
     """Result of code generation process.
-    
+
     This class represents the output of code generation, containing the generated files
     and optional metadata about where they were saved.
-    
+
     Attributes:
         generated_files: Dictionary mapping file names to their contents.
                        Expected keys are 'main_py', 'requirements_txt', and 'policy_json'.

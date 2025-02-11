@@ -181,11 +181,11 @@ def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) ->
 
 def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Generates code using CodeGeneratorAgent.
-    
+
     Args:
         state: Current workflow state
         agents: Dictionary containing required agents and configuration
-        
+
     Returns:
         Updated workflow state
     """
@@ -229,11 +229,11 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
 
 def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
     """Executes generated code using CodeExecutionAgent.
-    
+
     Args:
         state: Current workflow state
         agents: Dictionary containing required agents and configuration
-        
+
     Returns:
         Updated workflow state
     """
