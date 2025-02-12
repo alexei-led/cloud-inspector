@@ -48,7 +48,6 @@ class OrchestrationState(TypedDict):
     last_successful_iteration: Optional[int]
     execution_metrics: dict[str, Any]
     retry_attempts: int
-    credentials: Optional[dict[str, Any]]
 
 
 def create_initial_state(
@@ -86,5 +85,4 @@ def create_initial_state(
         "last_successful_iteration": None,
         "execution_metrics": {"start_time": now.isoformat(), "total_execution_time": 0, "resource_usage": {}},
         "retry_attempts": 0,
-        "credentials": None,
     }

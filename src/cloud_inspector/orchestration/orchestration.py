@@ -84,4 +84,10 @@ class OrchestrationAgent:
 
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
 
-        return compiled_workflow.invoke(initial_state, {"configurable": {"__credentials": credentials}})
+        # Remove credentials from params if present to keep them out of state
+        if params and "credentials" in params:
+            params.pop("credentials")
+
+        initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
+
+        return compiled_workflow.invoke(initial_state)
