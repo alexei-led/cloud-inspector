@@ -118,7 +118,7 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
     volumes = container_config["volumes"]
     assert len(volumes) == 1
     mount_point = list(volumes.values())[0]
-    assert mount_point["mode"] == "ro"
+    assert mount_point["mode"] == "rw"  # Changed from "ro" to "rw" to allow credentials file writing
 
 
 def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
@@ -231,7 +231,7 @@ def test_execute_with_network_access(mock_docker_client, mock_container):
 
     # Verify other configurations remain secure
     volumes = container_config["volumes"]
-    assert list(volumes.values())[0]["mode"] == "ro"  # Read-only mount
+    assert list(volumes.values())[0]["mode"] == "rw"  # Changed from "ro" to "rw"
 
     # Verify environment variables
     env_vars = container_config["environment"]
