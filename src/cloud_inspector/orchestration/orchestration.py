@@ -74,6 +74,5 @@ class OrchestrationAgent:
         compiled_workflow = workflow.compile()
 
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
-        initial_state["credentials"] = credentials
 
-        return compiled_workflow.invoke(initial_state)
+        return compiled_workflow.invoke(initial_state, {"configurable": {"__credentials": credentials}})
