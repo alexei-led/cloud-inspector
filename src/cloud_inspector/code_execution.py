@@ -118,8 +118,8 @@ class DockerSandbox:
         # List of attempts to parse, from most to least strict
         attempts = [
             lambda t: (t.strip(), False),  # Basic whitespace cleaning
-            lambda t: (t.strip().strip('"\''), True),  # Remove quotes
-            lambda t: (t.strip().strip('"\'').strip(), True),  # Remove quotes and extra whitespace
+            lambda t: (t.strip().strip("\"'"), True),  # Remove quotes
+            lambda t: (t.strip().strip("\"'").strip(), True),  # Remove quotes and extra whitespace
         ]
 
         # First try parsing the original text without any cleaning

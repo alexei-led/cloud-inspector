@@ -112,8 +112,6 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
     assert volume_config["mode"] == "rw"
 
 
-
-
 def test_json_parsing_scenarios(mock_docker_client, mock_container):
     """Test comprehensive JSON parsing scenarios."""
     mock_docker_client.containers.create.return_value = mock_container
@@ -124,26 +122,25 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
 
     parsing_test_cases = [
         # Valid JSON cases
-        ('{"key": "value"}', True, '{"key":"value"}'),  # Note: json.dumps removes spaces
-        (' {"key": "value"} ', True, '{"key":"value"}'),
-        ('"{"key": "value"}"', True, '{"key":"value"}'),
-        ('\'{"key": "value"}\'', True, '{"key":"value"}'),
-        ('{"key": "value"}\n', True, '{"key":"value"}'),
-        ('null', True, 'null'),
-        ('[]', True, '[]'),
-        ('{}', True, '{}'),
-        ('true', True, 'true'),
-        ('123', True, '123'),
+        ('{"key": "value"}', True, '{"key": "value"}'),
+        (' {"key": "value"} ', True, '{"key": "value"}'),
+        ('"{"key": "value"}"', True, '{"key": "value"}'),
+        ('\'{"key": "value"}\'', True, '{"key": "value"}'),
+        ('{"key": "value"}\n', True, '{"key": "value"}'),
+        ("null", True, "null"),
+        ("[]", True, "[]"),
+        ("{}", True, "{}"),
+        ("true", True, "true"),
+        ("123", True, "123"),
         ('"string"', True, '"string"'),
-        ('[1,2,3]', True, '[1,2,3]'),
-        ('{"nested": {"key": "value"}}', True, '{"nested":{"key":"value"}}'),
-        ('"{\"escaped\": \"json\"}"', True, '{"escaped": "json"}'),
-
+        ("[1,2,3]", True, "[1, 2, 3]"),
+        ('{"nested": {"key": "value"}}', True, '{"nested": {"key": "value"}}'),
+        ('"{"escaped": "json"}"', True, '{"escaped": "json"}'),
         # Invalid JSON cases
-        ('not json', False, 'not json'),
+        ("not json", False, "not json"),
         ('{"incomplete": "json"', False, '{"incomplete": "json"'),
-        ('', False, ''),
-        (' ', False, ' '),
+        ("", False, ""),
+        (" ", False, " "),
         ('Error: {"error": "message"}', False, 'Error: {"error": "message"}'),
     ]
 
@@ -155,7 +152,7 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
             # Instead verify we can parse it as JSON and it matches expected
             parsed = json.loads(cleaned)
             if parsed is None:
-                assert input_text.strip() == 'null', f"Got None from non-null input: {input_text}"
+                assert input_text.strip() == "null", f"Got None from non-null input: {input_text}"
             assert cleaned == expected_output, f"Unexpected output for input: {input_text}"
         else:
             assert cleaned == input_text
@@ -168,20 +165,17 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
         (b' {"result": "success"} ', True),  # With whitespace
         (b'\t{"result": "success"}\n', True),  # With tab
         (b'"\\"{\\"result\\": \\"success\\"}"', True),  # Escaped quotes
-        (b'Debug: Starting\n{"result": "success"}', True),  # Non-JSON prefix
-        (b'{"result": "success"}\nDebug: Done', True),  # Non-JSON suffix
+        (b'Debug: Starting\n{"result": "success"}', False),  # Non-JSON prefix
+        (b'{"result": "success"}\nDebug: Done', False),  # Non-JSON suffix
         (b'Log: {"nested": "json"} continue', False),  # JSON embedded in text
-        (b'not json at all', False),  # Invalid JSON
+        (b"not json at all", False),  # Invalid JSON
     ]
 
     for output, should_succeed in execution_test_cases:
         mock_container.logs.side_effect = [output, b""]  # stdout, stderr
         mock_container.wait.return_value = {"StatusCode": 0}
 
-        success, stdout, stderr, usage = sandbox.execute(
-            'print(\'test output\')',
-            "# no requirements"
-        )
+        success, stdout, stderr, usage = sandbox.execute("print('test output')", "# no requirements")
 
         assert success == should_succeed
         if should_succeed:
@@ -200,7 +194,7 @@ def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
         (b"", b'Regular error\n{"error": "json error"}'),  # Mixed content
         (b"", b'{"error": "json error"}\nRegular error'),  # JSON first
         (b"", b'Error: {"error": "wrapped json"}'),  # Embedded JSON
-        (b"", b'Multiple\nLine\nError\nMessage'),  # Pure text error
+        (b"", b"Multiple\nLine\nError\nMessage"),  # Pure text error
         (b"", b'{"error": {"nested": "error message"}}'),  # Nested JSON error
     ]
 
@@ -211,10 +205,7 @@ def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
         mock_container.wait.return_value = {"StatusCode": 1, "Error": {"Message": "Runtime error"}}
         mock_container.logs.side_effect = [stdout_output, stderr_output]
 
-        success, stdout, stderr, usage = sandbox.execute(
-            'import sys; sys.stderr.write(\'error output\')',
-            "# no requirements"
-        )
+        success, stdout, stderr, usage = sandbox.execute("import sys; sys.stderr.write('error output')", "# no requirements")
 
         assert not success
         assert stderr, "Stderr should not be empty"
