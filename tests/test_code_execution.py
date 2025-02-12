@@ -106,8 +106,9 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
 
     # verify AWS config file
     volumes = container_config["volumes"]
-    assert volumes["/code"]["bind"] == "/code"
-    assert volumes["/code"]["mode"] == "rw"
+    volume_config = list(volumes.values())[0]  # Get the first (and only) volume configuration
+    assert volume_config["bind"] == "/code"
+    assert volume_config["mode"] == "rw"
 
 
 def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
