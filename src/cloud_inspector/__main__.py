@@ -1,4 +1,5 @@
 """Main entry point for Cloud Inspector."""
+# pragma: no cover
 
 from cloud_inspector.cli import cli
 
