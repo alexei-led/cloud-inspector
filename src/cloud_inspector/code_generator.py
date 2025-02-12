@@ -179,7 +179,7 @@ When writing code that makes API calls to cloud providers:
   * Google Cloud: Remove 'kind', 'etag', 'selfLink' metadata fields
 - Create helper functions to clean responses when needed
 - Focus on returning only the meaningful service configuration and state data
-- Format the output as clean, readable JSON or YAML
+- Format the output as clean, readable JSON for easy consumption by other tools
 
 You must provide your response as a JSON object that follows this exact structure:
 {{
@@ -213,11 +213,7 @@ You must provide your response as a JSON object that follows this exact structur
 
             if response.get("parsed") is not None:
                 parsed = response["parsed"].model_dump() if isinstance(response["parsed"], GeneratedFiles) else response["parsed"]
-                return GeneratedFiles(
-                    main_py=self._reformat_code(parsed["main_py"], code=True),
-                    requirements_txt=self._reformat_code(parsed["requirements_txt"]),
-                    policy_json=self._reformat_code(parsed["policy_json"])
-                )
+                return GeneratedFiles(main_py=self._reformat_code(parsed["main_py"], code=True), requirements_txt=self._reformat_code(parsed["requirements_txt"]), policy_json=self._reformat_code(parsed["policy_json"]))
 
             raw_response = response.get("raw")
             latest_files = self._extract_latest_generated_files(raw_response)
