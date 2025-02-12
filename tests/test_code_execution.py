@@ -126,6 +126,111 @@ def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
     assert stdout == "Invalid JSON output"
 
 
+def test_execute_with_quoted_json_output(mock_docker_client, mock_container):
+    """Test handling of quoted JSON output from executed code."""
+    mock_docker_client.containers.create.return_value = mock_container
+    
+    # Test cases with different quote/newline combinations
+    test_cases = [
+        b'"{"result": "success"}"',  # Quoted JSON
+        b'\'{"result": "success"}\'',  # Single-quoted JSON
+        b'{"result": "success"}\n',  # JSON with newline
+        b'"{"result": "success"}\n"',  # Quoted JSON with newline
+        b' {"result": "success"} ',  # JSON with whitespace
+    ]
+    
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+    
+    for test_output in test_cases:
+        mock_container.logs.side_effect = [
+            test_output,  # stdout
+            b"",  # stderr
+        ]
+        
+        success, stdout, stderr, usage = sandbox.execute(
+            'print(\'{"result": "success"}\')',
+            "# no requirements"
+        )
+        
+        assert success, f"Failed to parse JSON: {test_output}"
+        try:
+            parsed = json.loads(stdout.strip().strip('"\'').strip())
+            assert parsed["result"] == "success"
+        except (json.JSONDecodeError, KeyError) as e:
+            pytest.fail(f"Failed to parse JSON {stdout}: {e}")
+
+
+def test_execute_with_quoted_json_stderr(mock_docker_client, mock_container):
+    """Test handling of quoted JSON in stderr."""
+    mock_docker_client.containers.create.return_value = mock_container
+    
+    # Test cases for stderr with different quote/newline combinations
+    test_cases = [
+        (b"", b'"{"error": "test error"}"'),  # Quoted JSON
+        (b"", b'\'{"error": "test error"}\''),  # Single-quoted JSON
+        (b"", b'{"error": "test error"}\n'),  # JSON with newline
+        (b"", b'"{"error": "test error"}\n"'),  # Quoted JSON with newline
+        (b"", b' {"error": "test error"} '),  # JSON with whitespace
+    ]
+    
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+    
+    for stdout_output, stderr_output in test_cases:
+        mock_container.wait.return_value = {"StatusCode": 1, "Error": {"Message": "Runtime error"}}
+        mock_container.logs.side_effect = [
+            stdout_output,  # stdout
+            stderr_output,  # stderr
+        ]
+        
+        success, stdout, stderr, usage = sandbox.execute(
+            'import sys; sys.stderr.write(\'{"error": "test error"}\')',
+            "# no requirements"
+        )
+        
+        assert not success
+        try:
+            parsed = json.loads(stderr.strip().strip('"\'').strip())
+            assert parsed["error"] == "test error"
+        except (json.JSONDecodeError, KeyError) as e:
+            pytest.fail(f"Failed to parse JSON stderr {stderr}: {e}")
+
+
+def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
+    """Test handling of mixed JSON and non-JSON stderr output."""
+    mock_docker_client.containers.create.return_value = mock_container
+    
+    test_cases = [
+        (b"", b'Regular error\n{"error": "json error"}'),  # Mixed content
+        (b"", b'{"error": "json error"}\nRegular error'),  # JSON first
+        (b"", b'Error: {"error": "wrapped json"}'),  # Embedded JSON
+    ]
+    
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+    
+    for stdout_output, stderr_output in test_cases:
+        mock_container.wait.return_value = {"StatusCode": 1, "Error": {"Message": "Runtime error"}}
+        mock_container.logs.side_effect = [
+            stdout_output,
+            stderr_output,
+        ]
+        
+        success, stdout, stderr, usage = sandbox.execute(
+            'import sys; sys.stderr.write(\'mixed error output\')',
+            "# no requirements"
+        )
+        
+        assert not success
+        assert stderr, "Stderr should not be empty"
+        # Either it should be valid JSON or contain the original error message
+        try:
+            json.loads(stderr.strip().strip('"\'').strip())
+        except json.JSONDecodeError:
+            assert "Runtime error" in stderr or "Error:" in stderr
+
+
 def test_execute_with_timeout(mock_docker_client, mock_container):
     """Test execution timeout handling."""
     mock_docker_client.containers.create.return_value = mock_container

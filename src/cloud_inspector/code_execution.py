@@ -217,9 +217,22 @@ python /code/main.py
                     stdout = stdout_logs.decode() if stdout_logs else ""
                     stderr = stderr_logs.decode() if stderr_logs else ""
 
-                    # Combine stderr with error message if both exist
+                    # Clean and combine stderr with error message if both exist
                     if error_msg and stderr:
-                        stderr = f"{stderr}\nContainer Error: {error_msg}"
+                        try:
+                            # Try to parse stderr as JSON first
+                            json.loads(stderr)
+                            combined_stderr = stderr
+                        except json.JSONDecodeError:
+                            # If not JSON, try cleaning the string
+                            cleaned_stderr = stderr.strip().strip('"\'').strip()
+                            try:
+                                json.loads(cleaned_stderr)
+                                combined_stderr = cleaned_stderr
+                            except json.JSONDecodeError:
+                                # If not JSON at all, combine with error message
+                                combined_stderr = f"{stderr}\nContainer Error: {error_msg}"
+                        stderr = combined_stderr
                     elif error_msg:
                         stderr = error_msg
 
@@ -228,12 +241,19 @@ python /code/main.py
                     # Try to parse stdout as JSON if execution was successful
                     if success and stdout.strip():
                         try:
+                            # First try direct parsing
                             json.loads(stdout)
                             logger.debug("Successfully parsed output as JSON")
-                        except json.JSONDecodeError as e:
-                            success = False
-                            stderr = f"Output is not in valid JSON format: {str(e)}"
-                            logger.warning("Code execution output was not valid JSON: %s", str(e))
+                        except json.JSONDecodeError:
+                            # If failed, try cleaning the string
+                            cleaned_output = stdout.strip().strip('"\'').strip()
+                            try:
+                                json.loads(cleaned_output)
+                                logger.debug("Successfully parsed cleaned output as JSON")
+                            except json.JSONDecodeError as e:
+                                success = False
+                                stderr = f"Output is not in valid JSON format: {str(e)}"
+                                logger.warning("Code execution output was not valid JSON: %s", str(e))
 
                     if not success:
                         logger.error("Container execution failed with status %d: %s", status_code, stderr or "No error message provided")
