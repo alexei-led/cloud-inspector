@@ -26,6 +26,31 @@ def mock_container():
     container.logs.return_value = b""
     return container
 
+@pytest.fixture
+def mock_container_with_stats():
+    """Create a mock Docker container with realistic stats."""
+    container = MagicMock()
+    container.wait.return_value = {"StatusCode": 0}
+    container.logs.return_value = b""
+    
+    # Add realistic stats
+    container.stats.return_value = {
+        "cpu_stats": {
+            "cpu_usage": {"total_usage": 100000},
+            "system_cpu_usage": 1000000,
+            "online_cpus": 4
+        },
+        "precpu_stats": {
+            "cpu_usage": {"total_usage": 90000},
+            "system_cpu_usage": 900000
+        },
+        "memory_stats": {
+            "usage": 1024 * 1024,  # 1MB
+            "limit": 512 * 1024 * 1024  # 512MB
+        }
+    }
+    return container
+
 
 def test_init_docker_success(mock_docker_client):
     """Test successful Docker initialization and image pulling."""
@@ -185,26 +210,125 @@ def test_execute_with_pip_error(mock_docker_client, mock_container):
     mock_container.remove.assert_called_once_with(force=True)
 
 
-def test_execute_with_network_isolation(mock_docker_client, mock_container):
-    """Test that network isolation is properly configured."""
+def test_execute_with_network_access(mock_docker_client, mock_container):
+    """Test that network access is properly configured."""
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.logs.return_value = b'{"result": "success"}'
 
     sandbox = DockerSandbox()
     sandbox.docker = mock_docker_client
 
-    success, stdout, stderr, usage = sandbox.execute('import requests\nprint(\'{"result": "success"}\')', "requests==2.28.0")
+    success, stdout, stderr, usage = sandbox.execute(
+        'import requests\nprint(\'{"result": "success"}\')', 
+        "requests==2.28.0"
+    )
 
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
 
-    # Verify network isolation
-    assert container_config["network_mode"] == "none"
-
-    # Verify other security configurations
+    # Verify network access is enabled
+    assert container_config["network_mode"] == "bridge"
+    
+    # Verify other configurations remain secure
     volumes = container_config["volumes"]
     assert list(volumes.values())[0]["mode"] == "ro"  # Read-only mount
-
-    # Verify pip cache configuration
+    
+    # Verify environment variables
     env_vars = container_config["environment"]
     assert env_vars["PIP_NO_CACHE_DIR"] == "1"
+    assert env_vars["PYTHONUNBUFFERED"] == "1"
+
+def test_execute_with_pip_network_failure(mock_docker_client, mock_container):
+    """Test handling of network failures during pip install."""
+    mock_docker_client.containers.create.return_value = mock_container
+    mock_container.wait.return_value = {"StatusCode": 1}
+    mock_container.logs.side_effect = [
+        b"",  # stdout
+        b"ERROR: Connection failed: Could not connect to PyPI",  # stderr
+    ]
+
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+
+    success, stdout, stderr, usage = sandbox.execute(
+        "print('test')",
+        "requests==2.28.0"
+    )
+
+    assert not success
+    assert "Connection failed" in stderr
+    mock_container.remove.assert_called_once_with(force=True)
+
+def test_execute_aws_api_call(mock_docker_client, mock_container):
+    """Test execution of code making AWS API calls."""
+    mock_docker_client.containers.create.return_value = mock_container
+    mock_container.logs.return_value = b'{"aws_response": "success"}'
+
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+
+    aws_code = '''
+import boto3
+client = boto3.client('s3')
+response = client.list_buckets()
+print('{"aws_response": "success"}')
+'''
+    
+    success, stdout, stderr, usage = sandbox.execute(
+        aws_code,
+        "boto3",
+        credentials={"aws_access_key_id": "test", "aws_secret_access_key": "test"}
+    )
+
+    assert success
+    assert "aws_response" in stdout
+    
+    # Verify AWS credentials were properly mounted
+    create_call = mock_docker_client.containers.create.call_args
+    container_config = create_call[1]
+    assert "AWS_SHARED_CREDENTIALS_FILE" in container_config["environment"]
+
+def test_execute_with_entrypoint_permissions(mock_docker_client, mock_container):
+    """Test that entrypoint script has correct permissions."""
+    from unittest.mock import mock_open, patch
+    
+    mock_docker_client.containers.create.return_value = mock_container
+    mock_container.logs.return_value = b'{"result": "success"}'
+
+    with patch('pathlib.Path.chmod') as mock_chmod:
+        sandbox = DockerSandbox()
+        sandbox.docker = mock_docker_client
+        
+        success, stdout, stderr, usage = sandbox.execute(
+            "print('test')",
+            "# no requirements"
+        )
+        
+        # Verify entrypoint script was made executable
+        mock_chmod.assert_called_once_with(0o755)
+
+def test_execute_with_resource_limits(mock_docker_client, mock_container):
+    """Test that resource limits are properly set."""
+    mock_docker_client.containers.create.return_value = mock_container
+    mock_container.logs.return_value = b'{"result": "success"}'
+
+    custom_cpu_limit = 0.5
+    custom_memory_limit = "256m"
+    
+    sandbox = DockerSandbox(
+        cpu_limit=custom_cpu_limit,
+        memory_limit=custom_memory_limit
+    )
+    sandbox.docker = mock_docker_client
+
+    success, stdout, stderr, usage = sandbox.execute(
+        "print('test')",
+        "# no requirements"
+    )
+
+    create_call = mock_docker_client.containers.create.call_args
+    container_config = create_call[1]
+    
+    # Verify resource limits
+    assert container_config["cpu_quota"] == int(custom_cpu_limit * 100000)
+    assert container_config["mem_limit"] == custom_memory_limit
