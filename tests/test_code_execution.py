@@ -191,15 +191,15 @@ def test_execute_with_pip_error(mock_docker_client, mock_container, tmp_path):
     """Test handling of pip installation errors."""
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.wait.return_value = {"StatusCode": 1}
-    
+
     # Simulate pip install log file
     pip_log_content = "ERROR: Could not find a version that satisfies the requirement invalid-package==99.99.99"
     (tmp_path / "pip_install.log").write_text(pip_log_content)
-    
+
     # Mock the tempfile.TemporaryDirectory to return our test directory
     with patch('tempfile.TemporaryDirectory') as mock_temp_dir:
         mock_temp_dir.return_value.__enter__.return_value = str(tmp_path)
-        
+
         sandbox = DockerSandbox()
         sandbox.docker = mock_docker_client
 
