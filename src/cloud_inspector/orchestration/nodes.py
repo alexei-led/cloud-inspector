@@ -227,12 +227,19 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
     return state
 
 
-def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
+def code_execution_node(
+    state: OrchestrationState,
+    agents: dict[str, Any],
+    credentials: Optional[dict[str, str]],
+    cloud_context: Optional[str]
+) -> OrchestrationState:
     """Executes generated code using CodeExecutionAgent.
 
     Args:
         state: Current workflow state
-        agents: Dictionary containing required agents and configuration
+        agents: Dictionary containing required agents
+        credentials: Cloud provider credentials
+        cloud_context: Cloud account/project/subscription identifier
 
     Returns:
         Updated workflow state
@@ -240,7 +247,6 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
     if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
         return state
 
-    credentials = state.get("credentials")
     code_executor: CodeExecutionAgent = agents["code_executor"]
 
     try:
@@ -253,9 +259,14 @@ def code_execution_node(state: OrchestrationState, agents: dict[str, Any]) -> Or
 
         logger.debug("Executing generated code for iteration %d", state["iteration"])
 
+        # Add cloud context to credentials if provided
+        execution_credentials = credentials.copy() if credentials else {}
+        if cloud_context:
+            execution_credentials["cloud_context"] = cloud_context
+
         execution_result: ExecutionResult = code_executor.execute_generated_code(
             generated_files=code_result.generated_files,
-            credentials=credentials,
+            credentials=execution_credentials,
             execution_id=f"exec_{state['iteration']}"
         )
 
