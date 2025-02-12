@@ -267,6 +267,12 @@ def test_execute_aws_api_call(mock_docker_client, mock_container):
     sandbox = DockerSandbox()
     sandbox.docker = mock_docker_client
 
+    credentials = {
+        "aws_access_key_id": "test_key",
+        "aws_secret_access_key": "test_secret",
+        "aws_session_token": "test_token"
+    }
+
     aws_code = '''
 import boto3
 client = boto3.client('s3')
@@ -277,16 +283,26 @@ print('{"aws_response": "success"}')
     success, stdout, stderr, usage = sandbox.execute(
         aws_code,
         "boto3",
-        credentials={"aws_access_key_id": "test", "aws_secret_access_key": "test"}
+        credentials=credentials
     )
 
     assert success
     assert "aws_response" in stdout
 
-    # Verify AWS credentials were properly mounted
+    # Verify container configuration
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
-    assert "AWS_SHARED_CREDENTIALS_FILE" in container_config["environment"]
+    
+    # Verify credentials are properly configured
+    env_vars = container_config["environment"]
+    assert env_vars["AWS_SHARED_CREDENTIALS_FILE"] == "/code/credentials"
+    assert env_vars["AWS_ACCESS_KEY_ID"] == "test_key"
+    assert env_vars["AWS_SECRET_ACCESS_KEY"] == "test_secret"
+    assert env_vars["AWS_SESSION_TOKEN"] == "test_token"
+
+    # Verify volume mounting with write access
+    volumes = container_config["volumes"]
+    assert list(volumes.values())[0]["mode"] == "rw"
 
 def test_execute_with_entrypoint_permissions(mock_docker_client, mock_container):
     """Test that entrypoint script has correct permissions."""
@@ -332,3 +348,23 @@ def test_execute_with_resource_limits(mock_docker_client, mock_container):
     # Verify resource limits
     assert container_config["cpu_quota"] == int(custom_cpu_limit * 100000)
     assert container_config["mem_limit"] == custom_memory_limit
+def test_pip_output_redirection(mock_docker_client, mock_container):
+    """Test that pip output is properly redirected to stderr."""
+    mock_docker_client.containers.create.return_value = mock_container
+    # Simulate pip output in stderr and actual program output in stdout
+    mock_container.logs.side_effect = [
+        b'{"result": "success"}',  # stdout
+        b'Installing collected packages: boto3',  # stderr
+    ]
+
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
+
+    success, stdout, stderr, usage = sandbox.execute(
+        'print(\'{"result": "success"}\')',
+        "boto3"
+    )
+
+    assert success
+    assert "Installing collected packages" in stderr
+    assert '{"result": "success"}' in stdout

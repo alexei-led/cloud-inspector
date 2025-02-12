@@ -138,7 +138,9 @@ class DockerSandbox:
             # Create entrypoint script that installs requirements first
             entrypoint_script = """#!/bin/sh
 set -e  # Exit on any error
-pip install --no-cache-dir -r /code/requirements.txt
+# Redirect pip output to stderr
+pip install --no-cache-dir -r /code/requirements.txt 1>&2
+# Execute the Python code
 python /code/main.py
 """
             (temp_path / "entrypoint.sh").write_text(entrypoint_script)
@@ -153,7 +155,7 @@ python /code/main.py
                         volumes={
                             str(temp_path.absolute()): {
                                 "bind": "/code",
-                                "mode": "ro",  # Keep as read-only for security
+                                "mode": "rw",  # Changed to rw to ensure credentials file is writable
                             }
                         },
                         cpu_quota=int(self.cpu_limit * 100000),
@@ -161,6 +163,16 @@ python /code/main.py
                         environment={
                             "PYTHONPATH": "/code",
                             "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if credentials else "",
+                            # Add explicit AWS environment variables as backup
+                            **(
+                                {
+                                    "AWS_ACCESS_KEY_ID": credentials.get("aws_access_key_id", ""),
+                                    "AWS_SECRET_ACCESS_KEY": credentials.get("aws_secret_access_key", ""),
+                                    "AWS_SESSION_TOKEN": credentials.get("aws_session_token", ""),
+                                }
+                                if credentials
+                                else {}
+                            ),
                             "PYTHONUNBUFFERED": "1",
                             "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
                         },
