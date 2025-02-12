@@ -75,9 +75,9 @@ class OrchestrationAgent:
 
     def execute(self, request: str, cloud: CloudProvider, service: str, params: Optional[dict] = None) -> dict:
         """Execute the orchestration workflow."""
-        credentials = None
+        # Extract and store credentials if present
         if params and "credentials" in params:
-            credentials = params.pop("credentials")
+            self.credentials = params.pop("credentials")
 
         workflow = self._create_workflow()
         compiled_workflow = workflow.compile()
