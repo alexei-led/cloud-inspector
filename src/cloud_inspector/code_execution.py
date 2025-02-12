@@ -164,7 +164,7 @@ python /code/main.py
                             "PYTHONUNBUFFERED": "1",
                             "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
                         },
-                        network_mode="none",  # Isolate network
+                        network_mode="bridge",  # Enable network access for AWS API and package installation
                         detach=True,
                         working_dir="/code",
                     )
