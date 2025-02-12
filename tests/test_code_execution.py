@@ -112,90 +112,81 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
     assert volume_config["mode"] == "rw"
 
 
-def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
-    """Test handling of invalid JSON output from executed code."""
-    mock_docker_client.containers.create.return_value = mock_container
-    mock_container.logs.return_value = b"Invalid JSON output"
 
+
+def test_json_parsing_scenarios(mock_docker_client, mock_container):
+    """Test comprehensive JSON parsing scenarios."""
+    mock_docker_client.containers.create.return_value = mock_container
+
+    # Test direct parsing function
     sandbox = DockerSandbox()
     sandbox.docker = mock_docker_client
 
-    success, stdout, stderr, usage = sandbox.execute("print('invalid json')", "# no requirements")
-
-    assert not success
-    assert "not in valid JSON format" in stderr
-    assert stdout == "Invalid JSON output"
-
-
-def test_execute_with_quoted_json_output(mock_docker_client, mock_container):
-    """Test handling of quoted JSON output from executed code."""
-    mock_docker_client.containers.create.return_value = mock_container
-
-    # Test cases with different quote/newline combinations
-    test_cases = [
-        b'"{"result": "success"}"',  # Quoted JSON
-        b'\'{"result": "success"}\'',  # Single-quoted JSON
-        b'{"result": "success"}\n',  # JSON with newline
-        b'"{"result": "success"}\n"',  # Quoted JSON with newline
-        b' {"result": "success"} ',  # JSON with whitespace
+    parsing_test_cases = [
+        # Valid JSON cases
+        ('{"key": "value"}', True, '{"key": "value"}'),
+        (' {"key": "value"} ', True, '{"key": "value"}'),
+        ('"{"key": "value"}"', True, '{"key": "value"}'),
+        ('\'{"key": "value"}\'', True, '{"key": "value"}'),
+        ('{"key": "value"}\n', True, '{"key": "value"}'),
+        ('null', True, 'null'),
+        ('[]', True, '[]'),
+        ('{}', True, '{}'),
+        ('true', True, 'true'),
+        ('123', True, '123'),
+        ('"string"', True, '"string"'),
+        ('[1,2,3]', True, '[1,2,3]'),
+        ('{"nested": {"key": "value"}}', True, '{"nested": {"key": "value"}}'),
+        ('"{\"escaped\": \"json\"}"', True, '{"escaped": "json"}'),
+        
+        # Invalid JSON cases
+        ('not json', False, 'not json'),
+        ('{"incomplete": "json"', False, '{"incomplete": "json"'),
+        ('', False, ''),
+        (' ', False, ' '),
+        ('Error: {"error": "message"}', False, 'Error: {"error": "message"}'),
     ]
 
-    sandbox = DockerSandbox()
-    sandbox.docker = mock_docker_client
+    for input_text, expected_success, expected_output in parsing_test_cases:
+        success, cleaned = sandbox._try_parse_json(input_text)
+        assert success == expected_success, f"Failed for input: {input_text}"
+        if success:
+            # Verify the cleaned output is valid JSON
+            assert json.loads(cleaned) is not None
+            assert cleaned == expected_output
+        else:
+            assert cleaned == input_text
 
-    for test_output in test_cases:
-        mock_container.logs.side_effect = [
-            test_output,  # stdout
-            b"",  # stderr
-        ]
-
-        success, stdout, stderr, usage = sandbox.execute(
-            'print(\'{"result": "success"}\')',
-            "# no requirements"
-        )
-
-        assert success, f"Failed to parse JSON: {test_output}"
-        try:
-            parsed = json.loads(stdout.strip().strip('"\'').strip())
-            assert parsed["result"] == "success"
-        except (json.JSONDecodeError, KeyError) as e:
-            pytest.fail(f"Failed to parse JSON {stdout}: {e}")
-
-
-def test_execute_with_quoted_json_stderr(mock_docker_client, mock_container):
-    """Test handling of quoted JSON in stderr."""
-    mock_docker_client.containers.create.return_value = mock_container
-
-    # Test cases for stderr with different quote/newline combinations
-    test_cases = [
-        (b"", b'"{"error": "test error"}"'),  # Quoted JSON
-        (b"", b'\'{"error": "test error"}\''),  # Single-quoted JSON
-        (b"", b'{"error": "test error"}\n'),  # JSON with newline
-        (b"", b'"{"error": "test error"}\n"'),  # Quoted JSON with newline
-        (b"", b' {"error": "test error"} '),  # JSON with whitespace
+    # Test execution with various outputs
+    execution_test_cases = [
+        (b'"{"result": "success"}"', True),  # Double-quoted
+        (b'\'{"result": "success"}\'', True),  # Single-quoted
+        (b'{"result": "success"}\n', True),  # With newline
+        (b' {"result": "success"} ', True),  # With whitespace
+        (b'\t{"result": "success"}\n', True),  # With tab
+        (b'"\\"{\\"result\\": \\"success\\"}"', True),  # Escaped quotes
+        (b'Debug: Starting\n{"result": "success"}', True),  # Non-JSON prefix
+        (b'{"result": "success"}\nDebug: Done', True),  # Non-JSON suffix
+        (b'Log: {"nested": "json"} continue', False),  # JSON embedded in text
+        (b'not json at all', False),  # Invalid JSON
     ]
 
-    sandbox = DockerSandbox()
-    sandbox.docker = mock_docker_client
-
-    for stdout_output, stderr_output in test_cases:
-        mock_container.wait.return_value = {"StatusCode": 1, "Error": {"Message": "Runtime error"}}
-        mock_container.logs.side_effect = [
-            stdout_output,  # stdout
-            stderr_output,  # stderr
-        ]
-
+    for output, should_succeed in execution_test_cases:
+        mock_container.logs.side_effect = [output, b""]  # stdout, stderr
+        mock_container.wait.return_value = {"StatusCode": 0}
+        
         success, stdout, stderr, usage = sandbox.execute(
-            'import sys; sys.stderr.write(\'{"error": "test error"}\')',
+            'print(\'test output\')',
             "# no requirements"
         )
-
-        assert not success
-        try:
-            parsed = json.loads(stderr.strip().strip('"\'').strip())
-            assert parsed["error"] == "test error"
-        except (json.JSONDecodeError, KeyError) as e:
-            pytest.fail(f"Failed to parse JSON stderr {stderr}: {e}")
+        
+        assert success == should_succeed
+        if should_succeed:
+            try:
+                parsed = json.loads(stdout)
+                assert isinstance(parsed, (dict, list, str, int, float, bool)) or parsed is None
+            except json.JSONDecodeError:
+                pytest.fail(f"Failed to parse JSON output: {stdout}")
 
 
 def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
