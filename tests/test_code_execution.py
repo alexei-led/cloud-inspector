@@ -89,7 +89,7 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
     sandbox = DockerSandbox()
     sandbox.docker = mock_docker_client
 
-    aws_credentials = {"aws_access_key_id": "test_key", "aws_secret_access_key": "test_secret", "aws_session_token": "test_token"}
+    aws_credentials = {"Version": 1, "AccessKeyId": "test_key", "SecretAccessKey": "test_secret", "SessionToken": "test_token"}
 
     success, stdout, stderr, usage = sandbox.execute("print('test')", "requests==2.28.0", aws_credentials)
 

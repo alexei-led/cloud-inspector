@@ -129,16 +129,16 @@ class DockerSandbox:
 
             # Handle cloud credentials
             if credentials:
-                if "aws_access_key_id" in credentials:
+                if "AccessKeyId" in credentials:
                     # AWS credentials
                     aws_dir = temp_path / ".aws"
                     aws_dir.mkdir(parents=True, exist_ok=True)
-                    aws_config = aws_dir / "credentials"
+                    aws_config = aws_dir / "config"
                     aws_content = "[default]\n"
-                    aws_content += f"aws_access_key_id = {credentials['aws_access_key_id']}\n"
-                    aws_content += f"aws_secret_access_key = {credentials['aws_secret_access_key']}\n"
-                    if "aws_session_token" in credentials:
-                        aws_content += f"aws_session_token = {credentials['aws_session_token']}\n"
+                    aws_content += f"aws_access_key_id = {credentials['AccessKeyId']}\n"
+                    aws_content += f"aws_secret_access_key = {credentials['SecretAccessKey']}\n"
+                    if "SessionToken" in credentials:
+                        aws_content += f"aws_session_token = {credentials['SessionToken']}\n"
                     aws_config.write_text(aws_content)
                     aws_config.chmod(0o644)
 
@@ -187,12 +187,12 @@ python /code/main.py
                             "HOME": "/code",  # Use /code as home directory
                             "PYTHONPATH": "/code",
                             "PYTHONUNBUFFERED": "1",
-                            "PIP_NO_CACHE_DIR": "1"
+                            "PIP_NO_CACHE_DIR": "1",
                         },
                         network_mode="bridge",
                         detach=True,
                         working_dir="/code",
-                        user="65534:65534"  # Use nobody:nogroup
+                        user="65534:65534",  # Use nobody:nogroup
                     )
 
                     container.start()
@@ -216,10 +216,6 @@ python /code/main.py
 
                     stdout = stdout_logs.decode() if stdout_logs else ""
                     stderr = stderr_logs.decode() if stderr_logs else ""
-
-                    # Check for pip install errors in stderr
-                    if status_code != 0 and "pip install" in stderr:
-                        stderr = f"Package installation error: {stderr}"
 
                     # Combine stderr with error message if both exist
                     if error_msg and stderr:
