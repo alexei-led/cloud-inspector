@@ -71,7 +71,26 @@ class DockerSandbox:
         if self.docker is None:
             try:
                 self.docker = docker.from_env()
-                self._ensure_image()
+                # Create custom image with cloud-user
+                dockerfile_content = f"""
+                    FROM {self.image}
+                    RUN useradd -m -s /bin/bash cloud-user
+                    RUN mkdir -p /home/cloud-user/.aws /home/cloud-user/.config/gcloud /home/cloud-user/.azure
+                    RUN chown -R cloud-user:cloud-user /home/cloud-user
+                """
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.dockerfile') as f:
+                    f.write(dockerfile_content)
+                    f.flush()
+                    self.image_with_user = f"{self.image}-with-user"
+                    try:
+                        self.docker.images.build(
+                            path=".", 
+                            dockerfile=f.name, 
+                            tag=self.image_with_user
+                        )
+                    except DockerException as e:
+                        logger.error(f"Failed to build custom image: {e}")
+                        return False
                 return True
             except DockerException as e:
                 logger.error(f"Failed to initialize Docker: {e}")
@@ -128,33 +147,46 @@ class DockerSandbox:
             (temp_path / "main.py").write_text(main_py)
             (temp_path / "requirements.txt").write_text(requirements_txt)
 
-            # Write credentials file if provided
-            if credentials:
-                creds_file = temp_path / "credentials"
-                # Handle AWS, GCP, and Azure credentials
-                if "AccessKeyId" in credentials:
-                    creds_file = temp_path / ".aws/config"
-                    creds_content = "[default]\n"
-                    creds_content += f"aws_access_key_id = {credentials['AccessKeyId']}\n"
-                    creds_content += f"aws_secret_access_key = {credentials['SecretAccessKey']}\n"
-                    if "SessionToken" in credentials:
-                        creds_content += f"aws_session_token = {credentials['SessionToken']}\n"
-                elif ("type" in credentials and credentials["type"] == "service_account") or "clientId" in credentials:
-                    creds_file = temp_path / ".config/gcloud"
-                    creds_content = json.dumps(credentials)
-                else:
-                    creds_file = temp_path / ".azure/credentials"
-                    creds_content = json.dumps(credentials)
+            # Create credential directories
+            aws_creds_dir = temp_path / ".aws"
+            gcp_creds_dir = temp_path / ".config/gcloud"
+            azure_creds_dir = temp_path / ".azure"
+            
+            for directory in [aws_creds_dir, gcp_creds_dir, azure_creds_dir]:
+                directory.mkdir(parents=True, exist_ok=True)
 
-                creds_file.write_text(creds_content)
+            # Handle cloud credentials
+            if credentials:
+                if "aws_access_key_id" in credentials:
+                    # AWS credentials
+                    aws_config = aws_creds_dir / "credentials"
+                    aws_content = "[default]\n"
+                    aws_content += f"aws_access_key_id = {credentials['aws_access_key_id']}\n"
+                    aws_content += f"aws_secret_access_key = {credentials['aws_secret_access_key']}\n"
+                    if "aws_session_token" in credentials:
+                        aws_content += f"aws_session_token = {credentials['aws_session_token']}\n"
+                    aws_config.write_text(aws_content)
+                    aws_config.chmod(0o600)
+
+                elif "type" in credentials and credentials["type"] == "service_account":
+                    # GCP service account
+                    gcp_creds = gcp_creds_dir / "application_default_credentials.json"
+                    gcp_creds.write_text(json.dumps(credentials))
+                    gcp_creds.chmod(0o600)
+
+                elif "clientId" in credentials:
+                    # Azure credentials
+                    azure_creds = azure_creds_dir / "credentials"
+                    azure_creds.write_text(json.dumps(credentials))
+                    azure_creds.chmod(0o600)
 
             # Create entrypoint script that installs requirements first
             entrypoint_script = """#!/bin/sh
 set -e  # Exit on any error
 # Redirect pip output to log file
-pip install --no-cache-dir -r /code/requirements.txt > /code/pip.log
+pip install --no-cache-dir --user -r /home/cloud-user/code/requirements.txt > /home/cloud-user/code/pip.log 2>&1
 # Execute the Python code
-python /code/main.py
+python /home/cloud-user/code/main.py
 """
             (temp_path / "entrypoint.sh").write_text(entrypoint_script)
             (temp_path / "entrypoint.sh").chmod(0o755)
@@ -163,25 +195,29 @@ python /code/main.py
             try:
                 try:
                     container = self.docker.containers.create(  # type: ignore
-                        self.image,
-                        command=["/code/entrypoint.sh"],
+                        self.image_with_user,  # Use custom image with cloud-user
+                        command=["/home/cloud-user/code/entrypoint.sh"],
                         volumes={
                             str(temp_path.absolute()): {
-                                "bind": "/code",
-                                "mode": "rw",  # Changed to rw to ensure credentials file is writable
+                                "bind": "/home/cloud-user/code",
+                                "mode": "rw",
                             }
                         },
                         cpu_quota=int(self.cpu_limit * 100000),
                         mem_limit=self.memory_limit,
                         environment={
-                            "PYTHONPATH": "/code",
+                            "HOME": "/home/cloud-user",
+                            "PYTHONPATH": "/home/cloud-user/code",
                             "PYTHONUNBUFFERED": "1",
-                            "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
+                            "PIP_NO_CACHE_DIR": "1",
+                            "AWS_SHARED_CREDENTIALS_FILE": "/home/cloud-user/.aws/credentials",
+                            "GOOGLE_APPLICATION_CREDENTIALS": "/home/cloud-user/.config/gcloud/application_default_credentials.json",
+                            "AZURE_CREDENTIALS_FILE": "/home/cloud-user/.azure/credentials"
                         },
-                        network_mode="bridge",  # Enable network access for AWS API and package installation
+                        network_mode="bridge",
                         detach=True,
-                        working_dir="/code",
-                        user="nobody",  # Run as non-root user
+                        working_dir="/home/cloud-user/code",
+                        user="cloud-user"
                     )
 
                     container.start()
