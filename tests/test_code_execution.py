@@ -105,20 +105,18 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
 
     # Verify container configuration
     container_config = create_call[1]
-    assert container_config["network_mode"] == "bridge"  # Changed from "none" to "bridge"
+    assert container_config["network_mode"] == "bridge"
     assert container_config["cpu_quota"] == int(sandbox.cpu_limit * 100000)
     assert container_config["mem_limit"] == sandbox.memory_limit
+    assert container_config["user"] == "root"  # Initial root user for setup
 
     # Verify AWS credentials handling
     env_vars = container_config["environment"]
     assert "AWS_SHARED_CREDENTIALS_FILE" in env_vars
     assert env_vars["AWS_SHARED_CREDENTIALS_FILE"] == "/code/credentials"
-
-    # Verify volume mounting
-    volumes = container_config["volumes"]
-    assert len(volumes) == 1
-    mount_point = list(volumes.values())[0]
-    assert mount_point["mode"] == "rw"  # Changed from "ro" to "rw" to allow credentials file writing
+    assert env_vars["AWS_ACCESS_KEY_ID"] == "test_key"
+    assert env_vars["AWS_SECRET_ACCESS_KEY"] == "test_secret"
+    assert env_vars["AWS_SESSION_TOKEN"] == "test_token"
 
 
 def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
@@ -133,6 +131,7 @@ def test_execute_with_invalid_json_output(mock_docker_client, mock_container):
 
     assert not success
     assert "not in valid JSON format" in stderr
+    assert stdout == "Invalid JSON output"
 
 
 def test_execute_with_timeout(mock_docker_client, mock_container):
@@ -188,26 +187,30 @@ def test_execute_with_container_error(mock_docker_client, mock_container):
     mock_container.remove.assert_called_once_with(force=True)
 
 
-def test_execute_with_pip_error(mock_docker_client, mock_container):
+def test_execute_with_pip_error(mock_docker_client, mock_container, tmp_path):
     """Test handling of pip installation errors."""
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.wait.return_value = {"StatusCode": 1}
-    mock_container.logs.side_effect = [
-        b"",  # stdout
-        b"ERROR: Could not find a version that satisfies the requirement invalid-package==99.99.99",  # stderr
-    ]
+    
+    # Simulate pip install log file
+    pip_log_content = "ERROR: Could not find a version that satisfies the requirement invalid-package==99.99.99"
+    (tmp_path / "pip_install.log").write_text(pip_log_content)
+    
+    # Mock the tempfile.TemporaryDirectory to return our test directory
+    with patch('tempfile.TemporaryDirectory') as mock_temp_dir:
+        mock_temp_dir.return_value.__enter__.return_value = str(tmp_path)
+        
+        sandbox = DockerSandbox()
+        sandbox.docker = mock_docker_client
 
-    sandbox = DockerSandbox()
-    sandbox.docker = mock_docker_client
+        success, stdout, stderr, usage = sandbox.execute(
+            "print('test')",
+            "invalid-package==99.99.99",
+        )
 
-    success, stdout, stderr, usage = sandbox.execute(
-        "print('test')",
-        "invalid-package==99.99.99",
-    )
-
-    assert not success
-    assert "Could not find a version" in stderr
-    mock_container.remove.assert_called_once_with(force=True)
+        assert not success
+        assert "Could not find a version" in stderr
+        mock_container.remove.assert_called_once_with(force=True)
 
 
 def test_execute_with_network_access(mock_docker_client, mock_container):
