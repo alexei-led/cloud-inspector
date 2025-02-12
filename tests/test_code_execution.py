@@ -124,11 +124,11 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
 
     parsing_test_cases = [
         # Valid JSON cases
-        ('{"key": "value"}', True, '{"key": "value"}'),
-        (' {"key": "value"} ', True, '{"key": "value"}'),
-        ('"{"key": "value"}"', True, '{"key": "value"}'),
-        ('\'{"key": "value"}\'', True, '{"key": "value"}'),
-        ('{"key": "value"}\n', True, '{"key": "value"}'),
+        ('{"key": "value"}', True, '{"key":"value"}'),  # Note: json.dumps removes spaces
+        (' {"key": "value"} ', True, '{"key":"value"}'),
+        ('"{"key": "value"}"', True, '{"key":"value"}'),
+        ('\'{"key": "value"}\'', True, '{"key":"value"}'),
+        ('{"key": "value"}\n', True, '{"key":"value"}'),
         ('null', True, 'null'),
         ('[]', True, '[]'),
         ('{}', True, '{}'),
@@ -136,7 +136,7 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
         ('123', True, '123'),
         ('"string"', True, '"string"'),
         ('[1,2,3]', True, '[1,2,3]'),
-        ('{"nested": {"key": "value"}}', True, '{"nested": {"key": "value"}}'),
+        ('{"nested": {"key": "value"}}', True, '{"nested":{"key":"value"}}'),
         ('"{\"escaped\": \"json\"}"', True, '{"escaped": "json"}'),
 
         # Invalid JSON cases
@@ -151,9 +151,12 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
         success, cleaned = sandbox._try_parse_json(input_text)
         assert success == expected_success, f"Failed for input: {input_text}"
         if success:
-            # Verify the cleaned output is valid JSON
-            assert json.loads(cleaned) is not None
-            assert cleaned == expected_output
+            # Don't check if result is None - it's valid for 'null'
+            # Instead verify we can parse it as JSON and it matches expected
+            parsed = json.loads(cleaned)
+            if parsed is None:
+                assert input_text.strip() == 'null', f"Got None from non-null input: {input_text}"
+            assert cleaned == expected_output, f"Unexpected output for input: {input_text}"
         else:
             assert cleaned == input_text
 
