@@ -179,6 +179,7 @@ python /code/main.py
                         network_mode="bridge",  # Enable network access for AWS API and package installation
                         detach=True,
                         working_dir="/code",
+                        user="root",  # Add explicit root user for permissions
                     )
 
                     container.start()
@@ -202,6 +203,10 @@ python /code/main.py
 
                     stdout = stdout_logs.decode() if stdout_logs else ""
                     stderr = stderr_logs.decode() if stderr_logs else ""
+
+                    # Check for pip install errors in stderr
+                    if status_code != 0 and "pip install" in stderr:
+                        stderr = f"Package installation error: {stderr}"
 
                     # Combine stderr with error message if both exist
                     if error_msg and stderr:

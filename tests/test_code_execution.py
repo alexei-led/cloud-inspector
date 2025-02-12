@@ -187,30 +187,28 @@ def test_execute_with_container_error(mock_docker_client, mock_container):
     mock_container.remove.assert_called_once_with(force=True)
 
 
-def test_execute_with_pip_error(mock_docker_client, mock_container, tmp_path):
+def test_execute_with_pip_error(mock_docker_client, mock_container):
     """Test handling of pip installation errors."""
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.wait.return_value = {"StatusCode": 1}
+    
+    # Simulate pip install error in stderr
+    mock_container.logs.side_effect = [
+        b"",  # stdout
+        b"pip install --no-cache-dir -r /code/requirements.txt\nERROR: Could not find a version that satisfies the requirement invalid-package==99.99.99",  # stderr
+    ]
 
-    # Simulate pip install log file
-    pip_log_content = "ERROR: Could not find a version that satisfies the requirement invalid-package==99.99.99"
-    (tmp_path / "pip_install.log").write_text(pip_log_content)
+    sandbox = DockerSandbox()
+    sandbox.docker = mock_docker_client
 
-    # Mock the tempfile.TemporaryDirectory to return our test directory
-    with patch('tempfile.TemporaryDirectory') as mock_temp_dir:
-        mock_temp_dir.return_value.__enter__.return_value = str(tmp_path)
+    success, stdout, stderr, usage = sandbox.execute(
+        "print('test')",
+        "invalid-package==99.99.99",
+    )
 
-        sandbox = DockerSandbox()
-        sandbox.docker = mock_docker_client
-
-        success, stdout, stderr, usage = sandbox.execute(
-            "print('test')",
-            "invalid-package==99.99.99",
-        )
-
-        assert not success
-        assert "Could not find a version" in stderr
-        mock_container.remove.assert_called_once_with(force=True)
+    assert not success
+    assert "Could not find a version" in stderr
+    mock_container.remove.assert_called_once_with(force=True)
 
 
 def test_execute_with_network_access(mock_docker_client, mock_container):
