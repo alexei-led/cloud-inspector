@@ -32,7 +32,7 @@ def mock_container_with_stats():
     container = MagicMock()
     container.wait.return_value = {"StatusCode": 0}
     container.logs.return_value = b""
-    
+
     # Add realistic stats
     container.stats.return_value = {
         "cpu_stats": {
@@ -219,7 +219,7 @@ def test_execute_with_network_access(mock_docker_client, mock_container):
     sandbox.docker = mock_docker_client
 
     success, stdout, stderr, usage = sandbox.execute(
-        'import requests\nprint(\'{"result": "success"}\')', 
+        'import requests\nprint(\'{"result": "success"}\')',
         "requests==2.28.0"
     )
 
@@ -228,11 +228,11 @@ def test_execute_with_network_access(mock_docker_client, mock_container):
 
     # Verify network access is enabled
     assert container_config["network_mode"] == "bridge"
-    
+
     # Verify other configurations remain secure
     volumes = container_config["volumes"]
     assert list(volumes.values())[0]["mode"] == "ro"  # Read-only mount
-    
+
     # Verify environment variables
     env_vars = container_config["environment"]
     assert env_vars["PIP_NO_CACHE_DIR"] == "1"
@@ -273,7 +273,7 @@ client = boto3.client('s3')
 response = client.list_buckets()
 print('{"aws_response": "success"}')
 '''
-    
+
     success, stdout, stderr, usage = sandbox.execute(
         aws_code,
         "boto3",
@@ -282,7 +282,7 @@ print('{"aws_response": "success"}')
 
     assert success
     assert "aws_response" in stdout
-    
+
     # Verify AWS credentials were properly mounted
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
@@ -290,20 +290,20 @@ print('{"aws_response": "success"}')
 
 def test_execute_with_entrypoint_permissions(mock_docker_client, mock_container):
     """Test that entrypoint script has correct permissions."""
-    from unittest.mock import mock_open, patch
-    
+    from unittest.mock import patch
+
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.logs.return_value = b'{"result": "success"}'
 
     with patch('pathlib.Path.chmod') as mock_chmod:
         sandbox = DockerSandbox()
         sandbox.docker = mock_docker_client
-        
+
         success, stdout, stderr, usage = sandbox.execute(
             "print('test')",
             "# no requirements"
         )
-        
+
         # Verify entrypoint script was made executable
         mock_chmod.assert_called_once_with(0o755)
 
@@ -314,7 +314,7 @@ def test_execute_with_resource_limits(mock_docker_client, mock_container):
 
     custom_cpu_limit = 0.5
     custom_memory_limit = "256m"
-    
+
     sandbox = DockerSandbox(
         cpu_limit=custom_cpu_limit,
         memory_limit=custom_memory_limit
@@ -328,7 +328,7 @@ def test_execute_with_resource_limits(mock_docker_client, mock_container):
 
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
-    
+
     # Verify resource limits
     assert container_config["cpu_quota"] == int(custom_cpu_limit * 100000)
     assert container_config["mem_limit"] == custom_memory_limit
