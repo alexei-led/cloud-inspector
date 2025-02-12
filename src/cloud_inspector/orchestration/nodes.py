@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, cast, Optional
 
 from langchain.prompts import ChatPromptTemplate
 
