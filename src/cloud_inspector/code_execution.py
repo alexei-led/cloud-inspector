@@ -114,7 +114,7 @@ class DockerSandbox:
         """
         if not text.strip():
             return False, text
-            
+
         # List of attempts to parse, from most to least strict
         attempts = [
             lambda t: (t, False),  # Original text
@@ -122,7 +122,7 @@ class DockerSandbox:
             lambda t: (t.strip().strip('"\''), True),  # Remove quotes
             lambda t: (t.strip().strip('"\'').strip(), True),  # Remove quotes and extra whitespace
         ]
-        
+
         for clean_func in attempts:
             cleaned, was_cleaned = clean_func(text)
             try:
@@ -131,7 +131,7 @@ class DockerSandbox:
             except json.JSONDecodeError:
                 if not was_cleaned:
                     continue
-        
+
         return False, text
 
     def execute(
