@@ -102,7 +102,7 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
     assert container_config["network_mode"] == "bridge"
     assert container_config["cpu_quota"] == int(sandbox.cpu_limit * 100000)
     assert container_config["mem_limit"] == sandbox.memory_limit
-    assert container_config["user"] == "nobody"
+    assert container_config["user"] == "65534:65534"  # nobody:nogroup
 
     # verify AWS config file
     volumes = container_config["volumes"]
