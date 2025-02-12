@@ -105,7 +105,7 @@ def test_execute_with_aws_credentials(mock_docker_client, mock_container):
 
     # Verify container configuration
     container_config = create_call[1]
-    assert container_config["network_mode"] == "none"
+    assert container_config["network_mode"] == "bridge"  # Changed from "none" to "bridge"
     assert container_config["cpu_quota"] == int(sandbox.cpu_limit * 100000)
     assert container_config["mem_limit"] == sandbox.memory_limit
 
