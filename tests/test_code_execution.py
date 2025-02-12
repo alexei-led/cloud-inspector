@@ -197,6 +197,8 @@ def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
         (b"", b'Regular error\n{"error": "json error"}'),  # Mixed content
         (b"", b'{"error": "json error"}\nRegular error'),  # JSON first
         (b"", b'Error: {"error": "wrapped json"}'),  # Embedded JSON
+        (b"", b'Multiple\nLine\nError\nMessage'),  # Pure text error
+        (b"", b'{"error": {"nested": "error message"}}'),  # Nested JSON error
     ]
 
     sandbox = DockerSandbox()
@@ -204,13 +206,10 @@ def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
 
     for stdout_output, stderr_output in test_cases:
         mock_container.wait.return_value = {"StatusCode": 1, "Error": {"Message": "Runtime error"}}
-        mock_container.logs.side_effect = [
-            stdout_output,
-            stderr_output,
-        ]
+        mock_container.logs.side_effect = [stdout_output, stderr_output]
 
         success, stdout, stderr, usage = sandbox.execute(
-            'import sys; sys.stderr.write(\'mixed error output\')',
+            'import sys; sys.stderr.write(\'error output\')',
             "# no requirements"
         )
 
@@ -218,7 +217,7 @@ def test_execute_with_mixed_stderr_output(mock_docker_client, mock_container):
         assert stderr, "Stderr should not be empty"
         # Either it should be valid JSON or contain the original error message
         try:
-            json.loads(stderr.strip().strip('"\'').strip())
+            json.loads(stderr)
         except json.JSONDecodeError:
             assert "Runtime error" in stderr or "Error:" in stderr
 
