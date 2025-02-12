@@ -1,5 +1,6 @@
 """Docker-based sandbox for safe code execution."""
 
+from calendar import c
 import json
 import logging
 import tempfile
@@ -112,7 +113,7 @@ class DockerSandbox:
         Args:
             main_py: Python code to execute
             requirements_txt: Requirements file content
-            aws_credentials: Optional AWS credentials
+            credentials: Optional Cloud credentials
 
         Returns:
             Tuple of (success, stdout, stderr, resource_usage)
@@ -127,19 +128,31 @@ class DockerSandbox:
             (temp_path / "main.py").write_text(main_py)
             (temp_path / "requirements.txt").write_text(requirements_txt)
 
-            # Write credentials if provided
+            # Write credentials file if provided
             if credentials:
                 creds_file = temp_path / "credentials"
-                creds_content = "[default]\n"
-                for key, value in credentials.items():
-                    creds_content += f"{key} = {value}\n"
+                # Handle AWS, GCP, and Azure credentials
+                if "AccessKeyId" in credentials:
+                    creds_file = temp_path / ".aws/config"
+                    creds_content = "[default]\n"
+                    creds_content += f"aws_access_key_id = {credentials['AccessKeyId']}\n"
+                    creds_content += f"aws_secret_access_key = {credentials['SecretAccessKey']}\n"
+                    if "SessionToken" in credentials:
+                        creds_content += f"aws_session_token = {credentials['SessionToken']}\n"
+                elif ("type" in credentials and credentials["type"] == "service_account") or "clientId" in credentials:
+                    creds_file = temp_path / ".config/gcloud"
+                    creds_content = json.dumps(credentials)
+                else:
+                    creds_file = temp_path / ".azure/credentials"
+                    creds_content = json.dumps(credentials)
+
                 creds_file.write_text(creds_content)
 
             # Create entrypoint script that installs requirements first
             entrypoint_script = """#!/bin/sh
 set -e  # Exit on any error
-# Redirect pip output to stderr
-pip install --no-cache-dir -r /code/requirements.txt 1>&2
+# Redirect pip output to log file
+pip install --no-cache-dir -r /code/requirements.txt > /code/pip.log
 # Execute the Python code
 python /code/main.py
 """
@@ -162,24 +175,13 @@ python /code/main.py
                         mem_limit=self.memory_limit,
                         environment={
                             "PYTHONPATH": "/code",
-                            "AWS_SHARED_CREDENTIALS_FILE": "/code/credentials" if credentials else "",
-                            # Add explicit AWS environment variables as backup
-                            **(
-                                {
-                                    "AWS_ACCESS_KEY_ID": credentials.get("aws_access_key_id", ""),
-                                    "AWS_SECRET_ACCESS_KEY": credentials.get("aws_secret_access_key", ""),
-                                    "AWS_SESSION_TOKEN": credentials.get("aws_session_token", ""),
-                                }
-                                if credentials
-                                else {}
-                            ),
                             "PYTHONUNBUFFERED": "1",
                             "PIP_NO_CACHE_DIR": "1",  # Prevent pip from trying to write cache
                         },
                         network_mode="bridge",  # Enable network access for AWS API and package installation
                         detach=True,
                         working_dir="/code",
-                        user="root",  # Add explicit root user for permissions
+                        user="nobody",  # Run as non-root user
                     )
 
                     container.start()
