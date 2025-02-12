@@ -292,7 +292,7 @@ print('{"aws_response": "success"}')
     # Verify container configuration
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
-    
+
     # Verify credentials are properly configured
     env_vars = container_config["environment"]
     assert env_vars["AWS_SHARED_CREDENTIALS_FILE"] == "/code/credentials"
