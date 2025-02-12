@@ -103,10 +103,10 @@ class DockerSandbox:
 
     def _try_parse_json(self, text: str) -> tuple[bool, str]:
         """Try to parse text as JSON, handling various formats.
-        
+
         Args:
             text: Text that might contain JSON
-            
+
         Returns:
             Tuple of (success, cleaned_text)
             If parsing succeeds, cleaned_text contains the valid JSON string
