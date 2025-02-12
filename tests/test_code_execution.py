@@ -191,7 +191,7 @@ def test_execute_with_pip_error(mock_docker_client, mock_container):
     """Test handling of pip installation errors."""
     mock_docker_client.containers.create.return_value = mock_container
     mock_container.wait.return_value = {"StatusCode": 1}
-    
+
     # Simulate pip install error in stderr
     mock_container.logs.side_effect = [
         b"",  # stdout
