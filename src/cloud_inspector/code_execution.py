@@ -127,38 +127,36 @@ class DockerSandbox:
             (temp_path / "main.py").write_text(main_py)
             (temp_path / "requirements.txt").write_text(requirements_txt)
 
-            # Create credential directories
-            aws_creds_dir = temp_path / ".aws"
-            gcp_creds_dir = temp_path / ".config/gcloud"
-            azure_creds_dir = temp_path / ".azure"
-
-            for directory in [aws_creds_dir, gcp_creds_dir, azure_creds_dir]:
-                directory.mkdir(parents=True, exist_ok=True)
-
             # Handle cloud credentials
             if credentials:
                 if "aws_access_key_id" in credentials:
                     # AWS credentials
-                    aws_config = aws_creds_dir / "credentials"
+                    aws_dir = temp_path / ".aws"
+                    aws_dir.mkdir(parents=True, exist_ok=True)
+                    aws_config = aws_dir / "credentials"
                     aws_content = "[default]\n"
                     aws_content += f"aws_access_key_id = {credentials['aws_access_key_id']}\n"
                     aws_content += f"aws_secret_access_key = {credentials['aws_secret_access_key']}\n"
                     if "aws_session_token" in credentials:
                         aws_content += f"aws_session_token = {credentials['aws_session_token']}\n"
                     aws_config.write_text(aws_content)
-                    aws_config.chmod(0o600)
+                    aws_config.chmod(0o644)
 
                 elif "type" in credentials and credentials["type"] == "service_account":
                     # GCP service account
-                    gcp_creds = gcp_creds_dir / "application_default_credentials.json"
+                    gcp_dir = temp_path / ".config" / "gcloud"
+                    gcp_dir.mkdir(parents=True, exist_ok=True)
+                    gcp_creds = gcp_dir / "application_default_credentials.json"
                     gcp_creds.write_text(json.dumps(credentials))
-                    gcp_creds.chmod(0o600)
+                    gcp_creds.chmod(0o644)
 
                 elif "clientId" in credentials:
                     # Azure credentials
-                    azure_creds = azure_creds_dir / "credentials"
+                    azure_dir = temp_path / ".azure"
+                    azure_dir.mkdir(parents=True, exist_ok=True)
+                    azure_creds = azure_dir / "credentials"
                     azure_creds.write_text(json.dumps(credentials))
-                    azure_creds.chmod(0o600)
+                    azure_creds.chmod(0o644)
 
             # Create entrypoint script that installs requirements first
             entrypoint_script = """#!/bin/sh
@@ -186,13 +184,10 @@ python /code/main.py
                         cpu_quota=int(self.cpu_limit * 100000),
                         mem_limit=self.memory_limit,
                         environment={
-                            "HOME": "/tmp",  # Use /tmp as home directory for nobody user
+                            "HOME": "/code",  # Use /code as home directory
                             "PYTHONPATH": "/code",
                             "PYTHONUNBUFFERED": "1",
-                            "PIP_NO_CACHE_DIR": "1",
-                            "AWS_SHARED_CREDENTIALS_FILE": "/code/.aws/credentials",
-                            "GOOGLE_APPLICATION_CREDENTIALS": "/code/.config/gcloud/application_default_credentials.json",
-                            "AZURE_CREDENTIALS_FILE": "/code/.azure/credentials"
+                            "PIP_NO_CACHE_DIR": "1"
                         },
                         network_mode="bridge",
                         detach=True,

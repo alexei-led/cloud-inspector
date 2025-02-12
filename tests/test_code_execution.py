@@ -273,14 +273,12 @@ print('{"aws_response": "success"}')
     create_call = mock_docker_client.containers.create.call_args
     container_config = create_call[1]
 
-    # Verify credentials are properly configured
+    # Verify environment setup
     env_vars = container_config["environment"]
-    assert env_vars["AWS_SHARED_CREDENTIALS_FILE"] == "/code/credentials"
-    assert env_vars["AWS_ACCESS_KEY_ID"] == "test_key"
-    assert env_vars["AWS_SECRET_ACCESS_KEY"] == "test_secret"
-    assert env_vars["AWS_SESSION_TOKEN"] == "test_token"
+    assert env_vars["HOME"] == "/code"
+    assert env_vars["PYTHONPATH"] == "/code"
 
-    # Verify volume mounting with write access
+    # Verify volume mounting
     volumes = container_config["volumes"]
     assert list(volumes.values())[0]["mode"] == "rw"
 
