@@ -101,6 +101,39 @@ class DockerSandbox:
             pass
         return 0.0
 
+    def _try_parse_json(self, text: str) -> tuple[bool, str]:
+        """Try to parse text as JSON, handling various formats.
+        
+        Args:
+            text: Text that might contain JSON
+            
+        Returns:
+            Tuple of (success, cleaned_text)
+            If parsing succeeds, cleaned_text contains the valid JSON string
+            If parsing fails, cleaned_text contains the original text
+        """
+        if not text.strip():
+            return False, text
+            
+        # List of attempts to parse, from most to least strict
+        attempts = [
+            lambda t: (t, False),  # Original text
+            lambda t: (t.strip(), False),  # Basic whitespace cleaning
+            lambda t: (t.strip().strip('"\''), True),  # Remove quotes
+            lambda t: (t.strip().strip('"\'').strip(), True),  # Remove quotes and extra whitespace
+        ]
+        
+        for clean_func in attempts:
+            cleaned, was_cleaned = clean_func(text)
+            try:
+                json.loads(cleaned)
+                return True, cleaned
+            except json.JSONDecodeError:
+                if not was_cleaned:
+                    continue
+        
+        return False, text
+
     def execute(
         self,
         main_py: str,
@@ -217,22 +250,10 @@ python /code/main.py
                     stdout = stdout_logs.decode() if stdout_logs else ""
                     stderr = stderr_logs.decode() if stderr_logs else ""
 
-                    # Clean and combine stderr with error message if both exist
+                    # Handle stderr and error message
                     if error_msg and stderr:
-                        try:
-                            # Try to parse stderr as JSON first
-                            json.loads(stderr)
-                            combined_stderr = stderr
-                        except json.JSONDecodeError:
-                            # If not JSON, try cleaning the string
-                            cleaned_stderr = stderr.strip().strip('"\'').strip()
-                            try:
-                                json.loads(cleaned_stderr)
-                                combined_stderr = cleaned_stderr
-                            except json.JSONDecodeError:
-                                # If not JSON at all, combine with error message
-                                combined_stderr = f"{stderr}\nContainer Error: {error_msg}"
-                        stderr = combined_stderr
+                        is_json, cleaned_stderr = self._try_parse_json(stderr)
+                        stderr = cleaned_stderr if is_json else f"{stderr}\nContainer Error: {error_msg}"
                     elif error_msg:
                         stderr = error_msg
 
@@ -240,20 +261,13 @@ python /code/main.py
 
                     # Try to parse stdout as JSON if execution was successful
                     if success and stdout.strip():
-                        try:
-                            # First try direct parsing
-                            json.loads(stdout)
-                            logger.debug("Successfully parsed output as JSON")
-                        except json.JSONDecodeError:
-                            # If failed, try cleaning the string
-                            cleaned_output = stdout.strip().strip('"\'').strip()
-                            try:
-                                json.loads(cleaned_output)
-                                logger.debug("Successfully parsed cleaned output as JSON")
-                            except json.JSONDecodeError as e:
-                                success = False
-                                stderr = f"Output is not in valid JSON format: {str(e)}"
-                                logger.warning("Code execution output was not valid JSON: %s", str(e))
+                        is_json, cleaned_stdout = self._try_parse_json(stdout)
+                        if not is_json:
+                            success = False
+                            stderr = "Output is not in valid JSON format"
+                            logger.warning("Code execution output was not valid JSON")
+                        else:
+                            stdout = cleaned_stdout
 
                     if not success:
                         logger.error("Container execution failed with status %d: %s", status_code, stderr or "No error message provided")
