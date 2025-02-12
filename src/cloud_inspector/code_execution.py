@@ -1,6 +1,5 @@
 """Docker-based sandbox for safe code execution."""
 
-from calendar import c
 import json
 import logging
 import tempfile
@@ -84,8 +83,8 @@ class DockerSandbox:
                     self.image_with_user = f"{self.image}-with-user"
                     try:
                         self.docker.images.build(
-                            path=".", 
-                            dockerfile=f.name, 
+                            path=".",
+                            dockerfile=f.name,
                             tag=self.image_with_user
                         )
                     except DockerException as e:
@@ -151,7 +150,7 @@ class DockerSandbox:
             aws_creds_dir = temp_path / ".aws"
             gcp_creds_dir = temp_path / ".config/gcloud"
             azure_creds_dir = temp_path / ".azure"
-            
+
             for directory in [aws_creds_dir, gcp_creds_dir, azure_creds_dir]:
                 directory.mkdir(parents=True, exist_ok=True)
 
