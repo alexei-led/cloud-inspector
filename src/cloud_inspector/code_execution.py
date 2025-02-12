@@ -70,26 +70,7 @@ class DockerSandbox:
         if self.docker is None:
             try:
                 self.docker = docker.from_env()
-                # Create custom image with cloud-user
-                dockerfile_content = f"""
-                    FROM {self.image}
-                    RUN useradd -m -s /bin/bash cloud-user
-                    RUN mkdir -p /home/cloud-user/.aws /home/cloud-user/.config/gcloud /home/cloud-user/.azure
-                    RUN chown -R cloud-user:cloud-user /home/cloud-user
-                """
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.dockerfile') as f:
-                    f.write(dockerfile_content)
-                    f.flush()
-                    self.image_with_user = f"{self.image}-with-user"
-                    try:
-                        self.docker.images.build(
-                            path=".",
-                            dockerfile=f.name,
-                            tag=self.image_with_user
-                        )
-                    except DockerException as e:
-                        logger.error(f"Failed to build custom image: {e}")
-                        return False
+                self._ensure_image()
                 return True
             except DockerException as e:
                 logger.error(f"Failed to initialize Docker: {e}")
@@ -183,9 +164,9 @@ class DockerSandbox:
             entrypoint_script = """#!/bin/sh
 set -e  # Exit on any error
 # Redirect pip output to log file
-pip install --no-cache-dir --user -r /home/cloud-user/code/requirements.txt > /home/cloud-user/code/pip.log 2>&1
+pip install --no-cache-dir --user -r /code/requirements.txt > /code/pip.log 2>&1
 # Execute the Python code
-python /home/cloud-user/code/main.py
+python /code/main.py
 """
             (temp_path / "entrypoint.sh").write_text(entrypoint_script)
             (temp_path / "entrypoint.sh").chmod(0o755)
@@ -194,29 +175,29 @@ python /home/cloud-user/code/main.py
             try:
                 try:
                     container = self.docker.containers.create(  # type: ignore
-                        self.image_with_user,  # Use custom image with cloud-user
-                        command=["/home/cloud-user/code/entrypoint.sh"],
+                        self.image,  # Use standard image
+                        command=["/bin/sh", "/code/entrypoint.sh"],
                         volumes={
                             str(temp_path.absolute()): {
-                                "bind": "/home/cloud-user/code",
+                                "bind": "/code",
                                 "mode": "rw",
                             }
                         },
                         cpu_quota=int(self.cpu_limit * 100000),
                         mem_limit=self.memory_limit,
                         environment={
-                            "HOME": "/home/cloud-user",
-                            "PYTHONPATH": "/home/cloud-user/code",
+                            "HOME": "/tmp",  # Use /tmp as home directory for nobody user
+                            "PYTHONPATH": "/code",
                             "PYTHONUNBUFFERED": "1",
                             "PIP_NO_CACHE_DIR": "1",
-                            "AWS_SHARED_CREDENTIALS_FILE": "/home/cloud-user/.aws/credentials",
-                            "GOOGLE_APPLICATION_CREDENTIALS": "/home/cloud-user/.config/gcloud/application_default_credentials.json",
-                            "AZURE_CREDENTIALS_FILE": "/home/cloud-user/.azure/credentials"
+                            "AWS_SHARED_CREDENTIALS_FILE": "/code/.aws/credentials",
+                            "GOOGLE_APPLICATION_CREDENTIALS": "/code/.config/gcloud/application_default_credentials.json",
+                            "AZURE_CREDENTIALS_FILE": "/code/.azure/credentials"
                         },
                         network_mode="bridge",
                         detach=True,
-                        working_dir="/home/cloud-user/code",
-                        user="cloud-user"
+                        working_dir="/code",
+                        user="65534:65534"  # Use nobody:nogroup
                     )
 
                     container.start()
