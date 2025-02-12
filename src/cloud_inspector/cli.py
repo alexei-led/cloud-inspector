@@ -42,10 +42,8 @@ def setup_logging(log_level: str) -> None:
     help="Set the logging level.",
 )
 @click.option("--project", default="cloud-inspector", help="LangSmith project name for tracing.")
-@click.option("--credentials-file", type=click.Path(exists=True, readable=True), help="Path to a JSON or YAML file containing cloud credentials (e.g. AWS keys).")
-@click.option("--cloud-context", type=str, help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription).")
 @click.pass_context
-def cli(ctx: click.Context, log_level: str, project: str, credentials_file: str, cloud_context: str) -> None:
+def cli(ctx: click.Context, log_level: str, project: str) -> None:
     """Cloud Inspector - AWS Code Generation Tool.
 
     Generate and analyze Python code for AWS operations using various LLMs.
@@ -55,8 +53,6 @@ def cli(ctx: click.Context, log_level: str, project: str, credentials_file: str,
     # Store common objects in context
     ctx.ensure_object(dict)
     ctx.obj["project"] = project
-    ctx.obj["credentials_file"] = credentials_file
-    ctx.obj["cloud_context"] = cloud_context
 
     model_registry = ModelRegistry()
     ctx.obj["registry"] = model_registry
@@ -121,12 +117,11 @@ class CloudProviderParamType(click.ParamType):
 @click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS)
 @click.option("--service", required=True)
 @click.option("--model", default="gpt-4-turbo")
+@click.option("--credentials-file", type=click.Path(exists=True, readable=True), help="Path to a JSON or YAML file containing cloud credentials")
+@click.option("--cloud-context", type=str, help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription)")
 @click.pass_context
-def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str):
+def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str, credentials_file: str, cloud_context: str):
     """Execute cloud inspection workflow."""
-    # Retrieve the credentials file and cloud_context from global options
-    credentials_file = ctx.obj.get("credentials_file")
-    cloud_context = ctx.obj.get("cloud_context")
     credentials = {}
     if credentials_file:
         with open(credentials_file) as f:
@@ -136,21 +131,20 @@ def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str
             except json.JSONDecodeError:
                 credentials = yaml.safe_load(content)
 
-    # Combine extra parameters if provided.
-    extra_params = {}
-    if credentials:
-        extra_params["credentials"] = credentials
-    if cloud_context:
-        extra_params["cloud_context"] = cloud_context
-
-    agent = OrchestrationAgent(code_generator=ctx.obj["code_generator"], prompt_generator=ctx.obj["prompt_generator"], code_executor=ctx.obj["code_executor"], model_name=model)
+    agent = OrchestrationAgent(
+        code_generator=ctx.obj["code_generator"],
+        prompt_generator=ctx.obj["prompt_generator"],
+        code_executor=ctx.obj["code_executor"],
+        model_name=model,
+        credentials=credentials if credentials else None,
+        cloud_context=cloud_context
+    )
 
     try:
         result = agent.execute(
             request=request,
             cloud=cloud,
             service=service,
-            params=extra_params if extra_params else None,
         )
 
         click.echo(json.dumps(result, indent=2, cls=DateTimeEncoder))
