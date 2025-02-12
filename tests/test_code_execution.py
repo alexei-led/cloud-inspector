@@ -138,7 +138,7 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
         ('[1,2,3]', True, '[1,2,3]'),
         ('{"nested": {"key": "value"}}', True, '{"nested": {"key": "value"}}'),
         ('"{\"escaped\": \"json\"}"', True, '{"escaped": "json"}'),
-        
+
         # Invalid JSON cases
         ('not json', False, 'not json'),
         ('{"incomplete": "json"', False, '{"incomplete": "json"'),
@@ -174,12 +174,12 @@ def test_json_parsing_scenarios(mock_docker_client, mock_container):
     for output, should_succeed in execution_test_cases:
         mock_container.logs.side_effect = [output, b""]  # stdout, stderr
         mock_container.wait.return_value = {"StatusCode": 0}
-        
+
         success, stdout, stderr, usage = sandbox.execute(
             'print(\'test output\')',
             "# no requirements"
         )
-        
+
         assert success == should_succeed
         if should_succeed:
             try:
