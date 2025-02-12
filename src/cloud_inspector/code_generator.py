@@ -181,6 +181,17 @@ When writing code that makes API calls to cloud providers:
 - Focus on returning only the meaningful service configuration and state data
 - Format the output as clean, readable JSON for easy consumption by other tools
 
+For cloud client initialization:
+- Use region/zone information based on resource scope:
+  * Global resources: No location needed
+  * Regional resources: Use region from previous results or user input
+  * Zonal resources: Use zone from previous results or user input
+- When investigating specific discovered resources, initialize client using the resource's own region/zone
+- When discovering new resources, use provided location parameters
+- For AWS: Use proper region_name in boto3.Session
+- For Google Cloud: Use proper project, region, and zone in client initialization
+- For Azure: Use proper location in client configuration
+
 You must provide your response as a JSON object that follows this exact structure:
 {{
     "main_py": "string containing Python code",
