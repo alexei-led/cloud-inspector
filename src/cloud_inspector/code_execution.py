@@ -117,20 +117,27 @@ class DockerSandbox:
 
         # List of attempts to parse, from most to least strict
         attempts = [
-            lambda t: (t, False),  # Original text
             lambda t: (t.strip(), False),  # Basic whitespace cleaning
             lambda t: (t.strip().strip('"\''), True),  # Remove quotes
             lambda t: (t.strip().strip('"\'').strip(), True),  # Remove quotes and extra whitespace
         ]
 
-        for clean_func in attempts:
-            cleaned, was_cleaned = clean_func(text)
-            try:
-                json.loads(cleaned)
-                return True, cleaned
-            except json.JSONDecodeError:
-                if not was_cleaned:
-                    continue
+        # First try parsing the original text without any cleaning
+        try:
+            parsed = json.loads(text)
+            # If successful, return the re-serialized JSON to ensure consistent formatting
+            return True, json.dumps(parsed)
+        except json.JSONDecodeError:
+            # If original parsing fails, try cleaning steps
+            for clean_func in attempts:
+                cleaned, was_cleaned = clean_func(text)
+                try:
+                    parsed = json.loads(cleaned)
+                    # Return re-serialized JSON to ensure consistent formatting
+                    return True, json.dumps(parsed)
+                except json.JSONDecodeError:
+                    if not was_cleaned:
+                        continue
 
         return False, text
 
