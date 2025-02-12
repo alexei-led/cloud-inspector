@@ -172,6 +172,15 @@ class CodeGeneratorAgent:
         """Prepare messages for the model including context and feedback."""
         # Add JSON format requirement to the system message
         system_message = f"""You are an expert {prompt.cloud.value} DevOps engineer.
+When writing code that makes API calls to cloud providers:
+- Always remove non-essential metadata from responses before printing or returning results:
+  * AWS: Remove 'ResponseMetadata'
+  * Azure: Remove 'additional_properties', '_attribute_map', '_validation'
+  * Google Cloud: Remove 'kind', 'etag', 'selfLink' metadata fields
+- Create helper functions to clean responses when needed
+- Focus on returning only the meaningful service configuration and state data
+- Format the output as clean, readable JSON or YAML
+
 You must provide your response as a JSON object that follows this exact structure:
 {{
     "main_py": "string containing Python code",
