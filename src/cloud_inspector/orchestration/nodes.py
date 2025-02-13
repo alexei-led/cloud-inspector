@@ -2,11 +2,12 @@
 
 import logging
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Optional, cast
 
 from langchain.prompts import ChatPromptTemplate
 
 from cloud_inspector.code_generator import CodeGeneratorAgent, CodeGeneratorResult, ParseError
+from cloud_inspector.components.models import ModelRegistry
 from cloud_inspector.components.types import CloudProvider, CodeGenerationPrompt, WorkflowStatus
 from cloud_inspector.execution_agent import CodeExecutionAgent, ExecutionResult
 from cloud_inspector.prompt_generator import PromptGeneratorAgent
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS = 3
 
 
-def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
+def discovery_analysis_node(state: OrchestrationState, model_name: str, model_registry: ModelRegistry) -> OrchestrationState:
     """Analyzes new discoveries against all previous findings to determine uniqueness."""
     try:
         if not state["discoveries"] or state.get("status") != WorkflowStatus.IN_PROGRESS:
@@ -32,7 +33,7 @@ def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -
 
         # Compare current discovery with all previous discoveries
         previous_discoveries = state["discoveries"][:-1]
-        is_redundant = _is_discovery_redundant(current_discovery, previous_discoveries, agents)
+        is_redundant = _is_discovery_redundant(current_discovery, previous_discoveries, model_name, model_registry)
 
         if is_redundant:
             state["status"] = WorkflowStatus.COMPLETED
@@ -50,7 +51,7 @@ def discovery_analysis_node(state: OrchestrationState, agents: dict[str, Any]) -
     return state
 
 
-def _is_discovery_redundant(current: dict, previous_discoveries: list[dict], agents: dict[str, Any]) -> bool:
+def _is_discovery_redundant(current: dict, previous_discoveries: list[dict], model_name: str, model_registry: ModelRegistry) -> bool:
     """Determine if current discovery adds new information compared to all previous discoveries.
 
     Uses AI to analyze if the current discovery's information is already contained within
@@ -60,10 +61,7 @@ def _is_discovery_redundant(current: dict, previous_discoveries: list[dict], age
         bool: True if current discovery is redundant (contained within previous discoveries),
               False if it provides new information.
     """
-    from cloud_inspector.components.models import ModelRegistry
-
-    model_registry: ModelRegistry = agents["model_registry"]
-    model = model_registry.get_model(agents["model_name"])
+    model = model_registry.get_model(model_name)
 
     template = """Analyze if the new discovery provides unique information compared to the existing discoveries.
 
@@ -90,7 +88,7 @@ Just output 'redundant' or 'unique' without any other text."""
     return result == "redundant"
 
 
-def orchestration_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
+def orchestration_node(state: OrchestrationState) -> OrchestrationState:
     """Decides next steps based on current state and analysis of discoveries."""
     now = datetime.now()
 
@@ -145,17 +143,15 @@ def orchestration_node(state: OrchestrationState, agents: dict[str, Any]) -> Orc
     return state
 
 
-def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
+def prompt_generation_node(state: OrchestrationState, model_name: str, prompt_generator: PromptGeneratorAgent) -> OrchestrationState:
     """Generates prompts using PromptGeneratorAgent."""
     try:
-        prompt_generator: PromptGeneratorAgent = agents["prompt_generator"]
-
         # Convert variables to list format expected by prompt generator
         var_list = [{"name": k, "value": v} for k, v in state["params"].items()]
 
         # Generate prompt based on current state
         prompt = prompt_generator.generate_prompt(
-            model_name=agents["model_name"],
+            model_name=model_name,
             cloud=cast(CloudProvider, state["cloud"]),
             service=state["service"],
             operation="inspect",
@@ -179,7 +175,7 @@ def prompt_generation_node(state: OrchestrationState, agents: dict[str, Any]) ->
     return state
 
 
-def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> OrchestrationState:
+def code_generation_node(state: OrchestrationState, model_name: str, code_generator: CodeGeneratorAgent) -> OrchestrationState:
     """Generates code using CodeGeneratorAgent.
 
     Args:
@@ -193,17 +189,11 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
         return state
 
     try:
-        code_generator: CodeGeneratorAgent = agents["code_generator"]
         prompt = state["outputs"]["prompt"]
 
         logger.debug("Generating code for prompt in iteration %d", state["iteration"])
 
-        result: CodeGeneratorResult = code_generator.generate_code(
-            prompt=prompt,
-            model_name=agents["model_name"],
-            variables=state["params"],
-            iteration_id=f"iter_{state['iteration']}"
-        )
+        result: CodeGeneratorResult = code_generator.generate_code(prompt=prompt, model_name=model_name, variables=state["params"], iteration_id=f"iter_{state['iteration']}")
 
         # Store the CodeGeneratorResult directly
         state["outputs"]["code"] = result
@@ -227,12 +217,7 @@ def code_generation_node(state: OrchestrationState, agents: dict[str, Any]) -> O
     return state
 
 
-def code_execution_node(
-    state: OrchestrationState,
-    agents: dict[str, Any],
-    credentials: Optional[dict[str, str]],
-    cloud_context: Optional[str]
-) -> OrchestrationState:
+def code_execution_node(state: OrchestrationState, code_executor: CodeExecutionAgent, credentials: Optional[dict[str, str]], cloud_context: Optional[str]) -> OrchestrationState:
     """Executes generated code using CodeExecutionAgent.
 
     Args:
@@ -246,8 +231,6 @@ def code_execution_node(
     """
     if state.get("status") == WorkflowStatus.FAILED or "code" not in state["outputs"]:
         return state
-
-    code_executor: CodeExecutionAgent = agents["code_executor"]
 
     try:
         # Get the code result
@@ -264,22 +247,12 @@ def code_execution_node(
         if cloud_context:
             execution_credentials["cloud_context"] = cloud_context
 
-        execution_result: ExecutionResult = code_executor.execute_generated_code(
-            generated_files=code_result.generated_files,
-            credentials=execution_credentials,
-            execution_id=f"exec_{state['iteration']}"
-        )
+        execution_result: ExecutionResult = code_executor.execute_generated_code(generated_files=code_result.generated_files, credentials=execution_credentials, execution_id=f"exec_{state['iteration']}")
 
         if execution_result.success:
             parsed_output = execution_result.get_parsed_output()
             if parsed_output is not None:
-                discovery = {
-                    "output": parsed_output,
-                    "timestamp": datetime.now().isoformat(),
-                    "iteration": state["iteration"],
-                    "execution_time": execution_result.execution_time,
-                    "resource_usage": execution_result.resource_usage
-                }
+                discovery = {"output": parsed_output, "timestamp": datetime.now().isoformat(), "iteration": state["iteration"], "execution_time": execution_result.execution_time, "resource_usage": execution_result.resource_usage}
                 state["discoveries"].append(discovery)
                 logger.info("Successfully added discovery for iteration %d", state["iteration"])
             else:
