@@ -94,9 +94,29 @@ def list_models(ctx: click.Context):
 
 
 @cli.group()
-def discovery():
+@click.option(
+    "--credentials-file",
+    type=click.Path(exists=True, readable=True),
+    help="Path to a JSON or YAML file containing cloud credentials"
+)
+@click.option(
+    "--cloud-context",
+    type=str,
+    help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription)"
+)
+@click.pass_context
+def discovery(ctx: click.Context, credentials_file: str, cloud_context: str):
     """Manage cloud resource discovery process."""
-    pass
+    # Store credentials and context in the Click context
+    if credentials_file:
+        with open(credentials_file) as f:
+            content = f.read()
+            try:
+                ctx.obj["credentials"] = json.loads(content)
+            except json.JSONDecodeError:
+                ctx.obj["credentials"] = yaml.safe_load(content)
+    
+    ctx.obj["cloud_context"] = cloud_context
 
 
 class CloudProviderParamType(click.ParamType):
@@ -117,19 +137,11 @@ class CloudProviderParamType(click.ParamType):
 @click.option("--cloud", type=CloudProviderParamType(), default=CloudProvider.AWS)
 @click.option("--service", required=True)
 @click.option("--model", default="gpt-4-turbo")
-@click.option("--credentials-file", type=click.Path(exists=True, readable=True), help="Path to a JSON or YAML file containing cloud credentials")
-@click.option("--cloud-context", type=str, help="Cloud account or project id (e.g. AWS account, GCP project, Azure subscription)")
 @click.pass_context
-def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str, credentials_file: str, cloud_context: str):
+def execute(ctx: click.Context, request: str, cloud: CloudProvider, service: str, model: str):
     """Execute cloud inspection workflow."""
-    credentials = {}
-    if credentials_file:
-        with open(credentials_file) as f:
-            content = f.read()
-            try:
-                credentials = json.loads(content)
-            except json.JSONDecodeError:
-                credentials = yaml.safe_load(content)
+    credentials = ctx.obj.get("credentials", {})
+    cloud_context = ctx.obj.get("cloud_context")
 
     agent = OrchestrationAgent(
         code_generator=ctx.obj["code_generator"],
