@@ -42,7 +42,7 @@ class OrchestrationAgent:
         workflow.add_node("orchestrate", lambda state: orchestration_node(state, {"model_name": self.model_name}))  # type: ignore
         workflow.add_node("generate_prompt", lambda state: prompt_generation_node(state, {"model_name": self.model_name, "prompt_generator": self.prompt_generator}))  # type: ignore
         workflow.add_node("generate_code", lambda state: code_generation_node(state, {"model_name": self.model_name, "code_generator": self.code_generator}))  # type: ignore
-        workflow.add_node("execute_code", lambda state: code_execution_node(state, {"code_executor": self.code_executor}, self.credentials, self.cloud_context))
+        workflow.add_node("execute_code", lambda state: code_execution_node(state, {"code_executor": self.code_executor}, self.credentials, self.cloud_context))  # type: ignore
         workflow.add_node("analyze_discovery", lambda state: discovery_analysis_node(state, {"model_name": self.model_name, "model_registry": self.model_registry}))  # type: ignore
 
         # Add edges
