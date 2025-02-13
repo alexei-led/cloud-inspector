@@ -29,7 +29,6 @@ class OrchestrationState(TypedDict):
         last_successful_iteration: Last iteration that completed successfully
         execution_metrics: Metrics about execution time and resource usage
         retry_attempts: Number of retry attempts for current iteration
-        credentials: Cloud-related credentials
     """
 
     messages: Annotated[list, add_messages]
