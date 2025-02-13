@@ -72,10 +72,10 @@ class OrchestrationAgent:
         """Execute the orchestration workflow."""
         workflow = self._create_workflow()
         compiled_workflow = workflow.compile()
-        
+
         # If params contains credentials, update self.credentials
         if params and "credentials" in params:
             self.credentials = params["credentials"]
-            
+
         initial_state = create_initial_state(request=request, cloud=cloud, service=service, params=params)
         return compiled_workflow.invoke(initial_state)
