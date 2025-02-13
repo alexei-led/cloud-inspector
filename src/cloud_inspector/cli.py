@@ -115,7 +115,7 @@ def discovery(ctx: click.Context, credentials_file: str, cloud_context: str):
                 ctx.obj["credentials"] = json.loads(content)
             except json.JSONDecodeError:
                 ctx.obj["credentials"] = yaml.safe_load(content)
-    
+
     ctx.obj["cloud_context"] = cloud_context
 
 
